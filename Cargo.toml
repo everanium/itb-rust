@@ -1,0 +1,36 @@
+[package]
+name = "itb"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+license = "MIT"
+description = "Rust binding for ITB (information-theoretic barrier) cipher via the libitb shared library"
+repository = "https://github.com/everanium/itb"
+readme = "README.md"
+keywords = ["cryptography", "cipher", "ouroboros", "ffi"]
+categories = ["cryptography", "external-ffi-bindings", "api-bindings"]
+
+[dependencies]
+libloading = "0.9"
+
+[dev-dependencies]
+# Empty for now — integration tests use only the crate itself + std.
+
+[lib]
+name = "itb"
+path = "src/lib.rs"
+
+# Benches use a custom Go-bench-style harness (`benches/common.rs`)
+# instead of criterion / libtest, mirroring the Python binding's
+# `_common.py` helper. `harness = false` tells cargo to skip the
+# default libtest harness and run the bench file's own `fn main()`.
+
+[[bench]]
+name = "bench_single"
+path = "benches/bench_single.rs"
+harness = false
+
+[[bench]]
+name = "bench_triple"
+path = "benches/bench_triple.rs"
+harness = false

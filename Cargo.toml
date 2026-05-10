@@ -34,3 +34,8 @@ harness = false
 name = "bench_triple"
 path = "benches/bench_triple.rs"
 harness = false
+
+[[bench]]
+name = "bench_wrapper"
+path = "benches/bench_wrapper.rs"
+harness = false

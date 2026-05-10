@@ -95,7 +95,8 @@ chunked I/O, error paths, lockSeed lifecycle.
 
 ```rust,no_run
 use std::fs::File;
-use std::io::{BufReader, BufWriter};
+use std::io::{BufReader, BufWriter, Read, Write};
+use itb::wrapper::{self, Cipher, UnwrapStreamReader, WrapStreamWriter};
 
 const SRC_PATH: &str = "/tmp/64mb.src";
 const ENC_PATH: &str = "/tmp/64mb.enc";
@@ -104,16 +105,55 @@ const CHUNK_SIZE: usize = 16 * 1024 * 1024;
 
 let mut enc = itb::Encryptor::new(Some("areion512"), Some(1024),
                                   Some("hmac-blake3"), 1)?;
+
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+let outer_key = wrapper::generate_key(Cipher::Aes128Ctr)?;
+
+// Sender — encrypt to an intermediate file, then wrap end-to-end
+// through one keystream session.
 {
     let fin  = BufReader::new(File::open(SRC_PATH)?);
-    let fout = BufWriter::new(File::create(ENC_PATH)?);
+    let fout = BufWriter::new(File::create(format!("{ENC_PATH}.inner"))?);
     enc.encrypt_stream_auth(fin, fout, CHUNK_SIZE)?;
 }
+// Format-deniability ITB masking via outer-cipher streaming wrapper (AES-128-CTR) - same ~0% overhead in stream mode (Recommended in every case).
 {
-    let fin  = BufReader::new(File::open(ENC_PATH)?);
+    let mut writer = WrapStreamWriter::new(Cipher::Aes128Ctr, &outer_key)?;
+    let mut fin  = BufReader::new(File::open(format!("{ENC_PATH}.inner"))?);
+    let mut fout = BufWriter::new(File::create(ENC_PATH)?);
+    fout.write_all(writer.nonce())?;
+    let mut buf = vec![0u8; CHUNK_SIZE];
+    loop {
+        let n = fin.read(&mut buf)?;
+        if n == 0 { break; }
+        fout.write_all(&writer.update(&buf[..n])?)?;
+    }
+    writer.close()?;
+}
+std::fs::remove_file(format!("{ENC_PATH}.inner"))?;
+
+// Receiver — strip the leading nonce, unwrap the body, decrypt.
+{
+    let nlen = wrapper::nonce_size(Cipher::Aes128Ctr)?;
+    let mut fin = BufReader::new(File::open(ENC_PATH)?);
+    let mut nonce_buf = vec![0u8; nlen];
+    fin.read_exact(&mut nonce_buf)?;
+    let mut reader = UnwrapStreamReader::new(Cipher::Aes128Ctr, &outer_key, &nonce_buf)?;
+    let mut fout = BufWriter::new(File::create(format!("{ENC_PATH}.inner"))?);
+    let mut buf = vec![0u8; CHUNK_SIZE];
+    loop {
+        let n = fin.read(&mut buf)?;
+        if n == 0 { break; }
+        fout.write_all(&reader.update(&buf[..n])?)?;
+    }
+    reader.close()?;
+}
+{
+    let fin  = BufReader::new(File::open(format!("{ENC_PATH}.inner"))?);
     let fout = BufWriter::new(File::create(DST_PATH)?);
     enc.decrypt_stream_auth(fin, fout, CHUNK_SIZE)?;
 }
+std::fs::remove_file(format!("{ENC_PATH}.inner"))?;
 enc.close()?;
 ```
 
@@ -159,7 +199,8 @@ Free functions `itb::encrypt_stream_auth` / `itb::decrypt_stream_auth` take thre
 
 ```rust,no_run
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read};
+use std::io::{BufReader, BufWriter, Read, Write};
+use itb::wrapper::{self, Cipher, UnwrapStreamReader, WrapStreamWriter};
 
 let noise = itb::Seed::new("areion512", 1024)?;
 let data  = itb::Seed::new("areion512", 1024)?;
@@ -168,16 +209,53 @@ let mut mac_key = [0u8; 32];
 File::open("/dev/urandom")?.read_exact(&mut mac_key)?;
 let mac = itb::MAC::new("hmac-blake3", &mac_key)?;
 
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+let outer_key = wrapper::generate_key(Cipher::Aes128Ctr)?;
+
+// Sender — encrypt to an intermediate file, then wrap end-to-end.
 {
     let fin  = BufReader::new(File::open(SRC_PATH)?);
-    let fout = BufWriter::new(File::create(ENC_PATH)?);
+    let fout = BufWriter::new(File::create(format!("{ENC_PATH}.inner"))?);
     itb::encrypt_stream_auth(&noise, &data, &start, &mac, fin, fout, CHUNK_SIZE)?;
 }
+// Format-deniability ITB masking via outer-cipher streaming wrapper (AES-128-CTR) - same ~0% overhead in stream mode (Recommended in every case).
 {
-    let fin  = BufReader::new(File::open(ENC_PATH)?);
+    let mut writer = WrapStreamWriter::new(Cipher::Aes128Ctr, &outer_key)?;
+    let mut fin  = BufReader::new(File::open(format!("{ENC_PATH}.inner"))?);
+    let mut fout = BufWriter::new(File::create(ENC_PATH)?);
+    fout.write_all(writer.nonce())?;
+    let mut buf = vec![0u8; CHUNK_SIZE];
+    loop {
+        let n = fin.read(&mut buf)?;
+        if n == 0 { break; }
+        fout.write_all(&writer.update(&buf[..n])?)?;
+    }
+    writer.close()?;
+}
+std::fs::remove_file(format!("{ENC_PATH}.inner"))?;
+
+// Receiver
+{
+    let nlen = wrapper::nonce_size(Cipher::Aes128Ctr)?;
+    let mut fin = BufReader::new(File::open(ENC_PATH)?);
+    let mut nonce_buf = vec![0u8; nlen];
+    fin.read_exact(&mut nonce_buf)?;
+    let mut reader = UnwrapStreamReader::new(Cipher::Aes128Ctr, &outer_key, &nonce_buf)?;
+    let mut fout = BufWriter::new(File::create(format!("{ENC_PATH}.inner"))?);
+    let mut buf = vec![0u8; CHUNK_SIZE];
+    loop {
+        let n = fin.read(&mut buf)?;
+        if n == 0 { break; }
+        fout.write_all(&reader.update(&buf[..n])?)?;
+    }
+    reader.close()?;
+}
+{
+    let fin  = BufReader::new(File::open(format!("{ENC_PATH}.inner"))?);
     let fout = BufWriter::new(File::create(DST_PATH)?);
     itb::decrypt_stream_auth(&noise, &data, &start, &mac, fin, fout, CHUNK_SIZE)?;
 }
+std::fs::remove_file(format!("{ENC_PATH}.inner"))?;
 ```
 
 **Build + run:**
@@ -225,6 +303,10 @@ across the Easy Mode bench surface.
 // Sender
 
 use itb::{peek_config, Encryptor};
+use itb::wrapper::{self, Cipher, UnwrapStreamReader, WrapStreamWriter};
+
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+let outer_key = wrapper::generate_key(Cipher::Aes128Ctr).unwrap();
 
 // Per-instance configuration — mutates only this encryptor's
 // Config. Two encryptors built side-by-side carry independent
@@ -274,8 +356,14 @@ let plaintext = b"any text or binary data - including 0x00 bytes";
 // Authenticated encrypt — 32-byte tag is computed across the
 // entire decrypted capacity and embedded inside the RGBWYOPA
 // container, preserving oracle-free deniability.
-let encrypted = enc.encrypt_auth(plaintext).unwrap();
+let mut encrypted = enc.encrypt_auth(plaintext).unwrap();
 println!("encrypted: {} bytes", encrypted.len());
+
+// Format-deniability ITB masking through outer cipher AES-128-CTR with ~0% overhead over ITB Encrypt / Decrypt (Recommended in every case).
+let nonce = wrapper::wrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut encrypted).unwrap();
+let mut wire = nonce;
+wire.extend_from_slice(&encrypted);
+println!("wire: {} bytes", wire.len());
 
 // Streaming alternative — slice plaintext into chunk_size pieces
 // and call enc.encrypt_auth() per chunk; each chunk carries its
@@ -283,21 +371,24 @@ println!("encrypted: {} bytes", encrypted.len());
 // per-instance accessors (track this encryptor's own nonce_bits,
 // NOT the process-wide itb::header_size).
 //
-// let mut cbuf: Vec<u8> = Vec::new();
+// let mut writer = WrapStreamWriter::new(Cipher::Aes128Ctr, &outer_key).unwrap();
+// let mut wire: Vec<u8> = writer.nonce().to_vec();
 // for piece in plaintext.chunks(chunk_size) {
-//     cbuf.extend_from_slice(&enc.encrypt_auth(piece).unwrap());
+//     let ct = enc.encrypt_auth(piece).unwrap();
+//     wire.extend_from_slice(&writer.update(&(ct.len() as u32).to_le_bytes()).unwrap());
+//     wire.extend_from_slice(&writer.update(&ct).unwrap());
 // }
-// let encrypted = cbuf;
+// writer.close().unwrap();
 
-// Send encrypted payload + state blob; Drop releases the handle
-// + zeroes key material at scope end. enc.free() is the
-// consuming counterpart that surfaces release-time errors.
+// Send wire + state blob; Drop releases the handle + zeroes key
+// material at scope end. enc.free() is the consuming counterpart
+// that surfaces release-time errors.
 
 
 // Receiver
 
-// Receive encrypted payload + state blob
-// let encrypted = ...;
+// Receive wire + state blob
+// let wire = ...;
 // let blob = ...;
 
 itb::set_max_workers(8).unwrap();   // limit to 8 CPU cores (default: 0 = all CPUs)
@@ -333,11 +424,15 @@ dec.set_lock_soup(1).unwrap();
 // lock_soup / lock_seed) from the saved blob.
 dec.import_state(&blob).unwrap();
 
+// Strip the leading nonce, unwrap the body, then decrypt.
+let mut wire_buf = wire;
+let encrypted = wrapper::unwrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut wire_buf).unwrap();
+
 // Authenticated decrypt — any single-bit tamper triggers MAC
 // failure (no oracle leak about which byte was tampered). Mismatch
 // surfaces as ITBError(STATUS_MAC_FAILURE), not a corrupted
 // plaintext.
-match dec.decrypt_auth(&encrypted) {
+match dec.decrypt_auth(encrypted) {
     Ok(plaintext) => {
         println!("decrypted: {}", String::from_utf8_lossy(&plaintext));
     }
@@ -347,24 +442,23 @@ match dec.decrypt_auth(&encrypted) {
     Err(e) => panic!("decrypt error: {e}"),
 }
 
-// Streaming alternative — walk the chunk stream, decrypt_auth
+// Streaming alternative — strip the leading nonce, unwrap through
+// one keystream session, then walk the chunk stream and decrypt_auth
 // each chunk; any tamper inside any chunk surfaces as
 // ITBError(STATUS_MAC_FAILURE) on that chunk.
 //
+// let nlen = wrapper::nonce_size(Cipher::Aes128Ctr).unwrap();
+// let mut reader = UnwrapStreamReader::new(Cipher::Aes128Ctr, &outer_key, &wire[..nlen]).unwrap();
+// let decrypted_wire = reader.update(&wire[nlen..]).unwrap();
+// reader.close().unwrap();
 // let header_size = dec.header_size().unwrap() as usize;
-// let mut accumulator: Vec<u8> = Vec::new();
 // let mut pbuf: Vec<u8> = Vec::new();
-// let mut cursor = &encrypted[..];
-// while !cursor.is_empty() {
-//     let take = std::cmp::min(64 * 1024, cursor.len());
-//     accumulator.extend_from_slice(&cursor[..take]);
-//     cursor = &cursor[take..];
-//     while accumulator.len() >= header_size {
-//         let chunk_len = dec.parse_chunk_len(&accumulator[..header_size]).unwrap();
-//         if accumulator.len() < chunk_len { break; }
-//         pbuf.extend_from_slice(&dec.decrypt_auth(&accumulator[..chunk_len]).unwrap());
-//         accumulator.drain(..chunk_len);
-//     }
+// let mut pos = 0;
+// while pos < decrypted_wire.len() {
+//     let clen = u32::from_le_bytes(decrypted_wire[pos..pos+4].try_into().unwrap()) as usize;
+//     pos += 4;
+//     pbuf.extend_from_slice(&dec.decrypt_auth(&decrypted_wire[pos..pos+clen]).unwrap());
+//     pos += clen;
 // }
 // let decrypted = pbuf;
 ```
@@ -386,6 +480,10 @@ restore.
 // Sender
 
 use itb::Encryptor;
+use itb::wrapper::{self, Cipher};
+
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+let outer_key = wrapper::generate_key(Cipher::Aes128Ctr).unwrap();
 
 // Per-slot primitive selection (Single Ouroboros, 3 + 1 slots).
 // Every name must share the same native hash width — mixing widths
@@ -433,16 +531,24 @@ let plaintext = b"mixed-primitive Easy Mode payload";
 // Authenticated encrypt — 32-byte tag is computed across the
 // entire decrypted capacity and embedded inside the RGBWYOPA
 // container, preserving oracle-free deniability.
-let encrypted = enc.encrypt_auth(plaintext).unwrap();
+let mut encrypted = enc.encrypt_auth(plaintext).unwrap();
 println!("encrypted: {} bytes", encrypted.len());
 
-// Send encrypted payload + state blob; Drop releases at scope end.
+// Format-deniability ITB masking through outer cipher AES-128-CTR with ~0% overhead over ITB Encrypt / Decrypt (Recommended in every case).
+let nonce = wrapper::wrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut encrypted).unwrap();
+let mut wire = nonce;
+wire.extend_from_slice(&encrypted);
+println!("wire: {} bytes", wire.len());
+
+// Send wire + state blob; Drop releases at scope end.
 
 
 // Receiver
 
-// Receive encrypted payload + state blob
-// let encrypted = ...;
+use itb::wrapper as wrapper_recv;
+
+// Receive wire + state blob
+// let wire = ...;
 // let blob = ...;
 
 // Receiver constructs a matching mixed encryptor — every per-slot
@@ -466,7 +572,11 @@ let mut dec = Encryptor::mixed_single(
 // mismatch.
 dec.import_state(&blob).unwrap();
 
-let decrypted = dec.decrypt_auth(&encrypted).unwrap();
+// Strip the leading nonce, unwrap the body, then decrypt.
+let mut wire_buf = wire;
+let encrypted = wrapper_recv::unwrap_in_place(wrapper_recv::Cipher::Aes128Ctr, &outer_key, &mut wire_buf).unwrap();
+
+let decrypted = dec.decrypt_auth(encrypted).unwrap();
 println!("decrypted: {}", String::from_utf8_lossy(&decrypted));
 ```
 
@@ -479,6 +589,10 @@ seeds (one shared `noiseSeed` plus three `dataSeed` and three
 
 ```rust,no_run
 use itb::Encryptor;
+use itb::wrapper::{self, Cipher};
+
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+let outer_key = wrapper::generate_key(Cipher::Aes128Ctr).unwrap();
 
 // mode=3 selects Triple Ouroboros. All other constructor arguments
 // behave identically to the Single (mode=1) case shown above.
@@ -490,8 +604,17 @@ let mut enc = Encryptor::new(
 ).unwrap();
 
 let plaintext = b"Triple Ouroboros payload";
-let encrypted = enc.encrypt_auth(plaintext).unwrap();
-let decrypted = enc.decrypt_auth(&encrypted).unwrap();
+let mut encrypted = enc.encrypt_auth(plaintext).unwrap();
+
+// Format-deniability ITB masking through outer cipher AES-128-CTR with ~0% overhead over ITB Encrypt / Decrypt (Recommended in every case).
+let nonce = wrapper::wrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut encrypted).unwrap();
+let mut wire = nonce;
+wire.extend_from_slice(&encrypted);
+
+// Receiver — strip the leading nonce, unwrap the body, then decrypt.
+let mut wire_buf = wire;
+let recovered = wrapper::unwrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut wire_buf).unwrap();
+let decrypted = enc.decrypt_auth(recovered).unwrap();
 assert_eq!(decrypted, plaintext);
 ```
 
@@ -515,6 +638,7 @@ constructor call.
 // Sender
 
 use itb::{decrypt_auth, encrypt_auth, Blob512, Seed, MAC};
+use itb::wrapper::{self, Cipher};
 
 // Optional: global configuration (all process-wide, atomic)
 itb::set_max_workers(8).unwrap();    // limit to 8 CPU cores (default: 0 = all CPUs)
@@ -555,13 +679,22 @@ ns.attach_lock_seed(&ls).unwrap();
 let mac_key = [0u8; 32];
 let mac = MAC::new("hmac-blake3", &mac_key).unwrap();
 
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+let outer_key = wrapper::generate_key(Cipher::Aes128Ctr).unwrap();
+
 let plaintext = b"any text or binary data - including 0x00 bytes";
 
 // Authenticated encrypt — 32-byte tag is computed across the
 // entire decrypted capacity and embedded inside the RGBWYOPA
 // container, preserving oracle-free deniability.
-let encrypted = encrypt_auth(&ns, &ds, &ss, &mac, plaintext).unwrap();
+let mut encrypted = encrypt_auth(&ns, &ds, &ss, &mac, plaintext).unwrap();
 println!("encrypted: {} bytes", encrypted.len());
+
+// Format-deniability ITB masking through outer cipher AES-128-CTR with ~0% overhead over ITB Encrypt / Decrypt (Recommended in every case).
+let nonce = wrapper::wrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut encrypted).unwrap();
+let mut wire = nonce;
+wire.extend_from_slice(&encrypted);
+println!("wire: {} bytes", wire.len());
 
 // Cross-process persistence: itb::Blob512 packs every seed's hash
 // key + components, the optional dedicated lockSeed, and the MAC
@@ -582,16 +715,16 @@ blob.set_mac_name(Some("hmac-blake3")).unwrap();
 let blob_bytes = blob.export(true, true).unwrap();   // lockseed=true, mac=true
 println!("persistence blob: {} bytes", blob_bytes.len());
 
-// Send encrypted payload + blob_bytes; Drop releases the seed,
-// MAC, and blob handles at scope end.
+// Send wire + blob_bytes; Drop releases the seed, MAC, and blob
+// handles at scope end.
 
 
 // Receiver — same code block, shared `use` from above.
 
 itb::set_max_workers(8).unwrap();   // deployment knob — not serialised by Blob512
 
-// Receive encrypted payload + blob_bytes
-// let encrypted = ...;
+// Receive wire + blob_bytes
+// let wire = ...;
 // let blob_bytes = ...;
 
 // Blob512.import_blob restores per-slot hash keys + components AND
@@ -626,9 +759,13 @@ let mac_name = restored.get_mac_name().unwrap();
 let mac_key = restored.get_mac_key().unwrap();
 let mac = MAC::new(&mac_name, &mac_key).unwrap();
 
+// Strip the leading nonce, unwrap the body, then decrypt.
+let mut wire_buf = wire;
+let encrypted = wrapper::unwrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut wire_buf).unwrap();
+
 // Authenticated decrypt — any single-bit tamper triggers MAC
 // failure (no oracle leak about which byte was tampered).
-let decrypted = decrypt_auth(&ns, &ds, &ss, &mac, &encrypted).unwrap();
+let decrypted = decrypt_auth(&ns, &ds, &ss, &mac, encrypted).unwrap();
 println!("decrypted: {}", String::from_utf8_lossy(&decrypted));
 ```
 
@@ -636,7 +773,7 @@ println!("decrypted: {}", String::from_utf8_lossy(&decrypted));
 
 [`StreamEncryptor`] / [`StreamDecryptor`] (and the seven-seed
 counterparts [`StreamEncryptor3`] / [`StreamDecryptor3`]) wrap the
-one-shot encrypt / decrypt API behind a `Write` / `feed`-driven
+Single Message Encrypt / Decrypt API behind a `Write` / `feed`-driven
 chunked I/O surface. ITB ciphertexts cap at ~64 MB plaintext per
 chunk; streaming larger payloads slices the input into chunks at
 the binding layer, encrypts each chunk through the regular FFI

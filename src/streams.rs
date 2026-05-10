@@ -1,5 +1,5 @@
-//! File-like streaming wrappers over the one-shot ITB encrypt /
-//! decrypt API.
+//! File-like streaming wrappers over the Single Message ITB Encrypt /
+//! Decrypt API.
 //!
 //! ITB ciphertexts cap at ~64 MB plaintext per chunk (the underlying
 //! container size limit). Streaming larger payloads simply means

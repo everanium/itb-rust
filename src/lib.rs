@@ -44,6 +44,7 @@ pub mod encrypt;
 pub mod encryptor;
 pub mod blob;
 pub mod streams;
+pub mod wrapper;
 
 pub use error::{last_error, ITBError};
 pub use registry::{

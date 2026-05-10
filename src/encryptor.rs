@@ -1231,10 +1231,10 @@ impl Encryptor {
     /// be empty when `final_flag = true`.
     ///
     /// Reuses the per-encryptor `out_buf` cache (Bonus 1 in
-    /// .NEXTBIND.md §7.1) — same scope as the single-shot
+    /// .NEXTBIND.md §7.1) — same scope as the Single Message
     /// [`Encryptor::cipher_call`] path — so the streaming hot loop
     /// amortises the allocation across every chunk just like the
-    /// single-shot Easy Mode path does. Returns
+    /// Single Message Easy Mode path does. Returns
     /// `self.out_buf[..out_len].to_vec()` (the eager copy detaches
     /// the bytes from the cache so the next chunk's call may safely
     /// overwrite the cache).

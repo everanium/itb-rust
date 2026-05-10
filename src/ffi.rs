@@ -403,6 +403,57 @@ pub type FnBlobExport3 =
 pub type FnBlobImport = unsafe extern "C" fn(usize, *const c_void, usize) -> c_int;
 pub type FnBlobImport3 = unsafe extern "C" fn(usize, *const c_void, usize) -> c_int;
 
+// Format-deniability wrapper — outer keystream cipher
+// (AES-128-CTR / ChaCha20 / SipHash-2-4 in CTR mode) over an ITB
+// ciphertext blob. The 12 entry points below dispatch off a
+// `cipher_name` string and mirror the Go-side `wrapper` package.
+
+pub type FnWrapperKeySize = unsafe extern "C" fn(*const c_char, *mut usize) -> c_int;
+pub type FnWrapperNonceSize = unsafe extern "C" fn(*const c_char, *mut usize) -> c_int;
+
+pub type FnWrap = unsafe extern "C" fn(
+    *const c_char,        // cipherName
+    *const c_void, usize, // key
+    *const c_void, usize, // blob
+    *mut c_void, usize,   // out, outCap
+    *mut usize,           // outLen
+) -> c_int;
+pub type FnUnwrap = FnWrap;
+
+pub type FnWrapInPlace = unsafe extern "C" fn(
+    *const c_char,        // cipherName
+    *const c_void, usize, // key
+    *mut c_void, usize,   // blob (in/out)
+    *mut c_void, usize,   // outNonce, nonceCap
+) -> c_int;
+pub type FnUnwrapInPlace = unsafe extern "C" fn(
+    *const c_char,        // cipherName
+    *const c_void, usize, // key
+    *mut c_void, usize,   // wire (in/out)
+) -> c_int;
+
+pub type FnWrapStreamWriterInit = unsafe extern "C" fn(
+    *const c_char,        // cipherName
+    *const c_void, usize, // key
+    *mut c_void, usize,   // outNonce, nonceCap
+    *mut usize,           // outHandle (uintptr_t)
+) -> c_int;
+pub type FnWrapStreamWriterUpdate = unsafe extern "C" fn(
+    usize,                // handle
+    *const c_void, usize, // src
+    *mut c_void, usize,   // dst, dstCap
+) -> c_int;
+pub type FnWrapStreamWriterFree = unsafe extern "C" fn(usize) -> c_int;
+
+pub type FnUnwrapStreamReaderInit = unsafe extern "C" fn(
+    *const c_char,        // cipherName
+    *const c_void, usize, // key
+    *const c_void, usize, // wireNonce
+    *mut usize,           // outHandle (uintptr_t)
+) -> c_int;
+pub type FnUnwrapStreamReaderUpdate = FnWrapStreamWriterUpdate;
+pub type FnUnwrapStreamReaderFree = FnWrapStreamWriterFree;
+
 // --------------------------------------------------------------------
 // Library handle — process-wide singleton holding cached fn pointers.
 // --------------------------------------------------------------------
@@ -536,6 +587,21 @@ pub(crate) struct LibItb {
     pub(crate) ITB_Blob_Export3: FnBlobExport3,
     pub(crate) ITB_Blob_Import: FnBlobImport,
     pub(crate) ITB_Blob_Import3: FnBlobImport3,
+
+    // Format-deniability wrapper — the 12 outer cipher FFI entries
+    // exported from cmd/cshared/main.go on top of github.com/everanium/itb/wrapper.
+    pub(crate) ITB_WrapperKeySize: FnWrapperKeySize,
+    pub(crate) ITB_WrapperNonceSize: FnWrapperNonceSize,
+    pub(crate) ITB_Wrap: FnWrap,
+    pub(crate) ITB_Unwrap: FnUnwrap,
+    pub(crate) ITB_WrapInPlace: FnWrapInPlace,
+    pub(crate) ITB_UnwrapInPlace: FnUnwrapInPlace,
+    pub(crate) ITB_WrapStreamWriter_Init: FnWrapStreamWriterInit,
+    pub(crate) ITB_WrapStreamWriter_Update: FnWrapStreamWriterUpdate,
+    pub(crate) ITB_WrapStreamWriter_Free: FnWrapStreamWriterFree,
+    pub(crate) ITB_UnwrapStreamReader_Init: FnUnwrapStreamReaderInit,
+    pub(crate) ITB_UnwrapStreamReader_Update: FnUnwrapStreamReaderUpdate,
+    pub(crate) ITB_UnwrapStreamReader_Free: FnUnwrapStreamReaderFree,
 
     // Library kept alive for the lifetime of the singleton so the
     // raw fn pointers above stay valid. Declared LAST so it drops
@@ -702,6 +768,19 @@ impl LibItb {
                 ITB_Blob_Export3: sym!(b"ITB_Blob_Export3"),
                 ITB_Blob_Import: sym!(b"ITB_Blob_Import"),
                 ITB_Blob_Import3: sym!(b"ITB_Blob_Import3"),
+
+                ITB_WrapperKeySize: sym!(b"ITB_WrapperKeySize"),
+                ITB_WrapperNonceSize: sym!(b"ITB_WrapperNonceSize"),
+                ITB_Wrap: sym!(b"ITB_Wrap"),
+                ITB_Unwrap: sym!(b"ITB_Unwrap"),
+                ITB_WrapInPlace: sym!(b"ITB_WrapInPlace"),
+                ITB_UnwrapInPlace: sym!(b"ITB_UnwrapInPlace"),
+                ITB_WrapStreamWriter_Init: sym!(b"ITB_WrapStreamWriter_Init"),
+                ITB_WrapStreamWriter_Update: sym!(b"ITB_WrapStreamWriter_Update"),
+                ITB_WrapStreamWriter_Free: sym!(b"ITB_WrapStreamWriter_Free"),
+                ITB_UnwrapStreamReader_Init: sym!(b"ITB_UnwrapStreamReader_Init"),
+                ITB_UnwrapStreamReader_Update: sym!(b"ITB_UnwrapStreamReader_Update"),
+                ITB_UnwrapStreamReader_Free: sym!(b"ITB_UnwrapStreamReader_Free"),
 
                 _lib: lib,
             })

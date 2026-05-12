@@ -158,7 +158,7 @@ let outer_key = wrapper::generate_key(Cipher::Aes128Ctr)?;
     let fout = BufWriter::new(File::create(format!("{ENC_PATH}.inner"))?);
     enc.encrypt_stream_auth(fin, fout, CHUNK_SIZE)?;
 }
-// Format-deniability ITB masking via outer-cipher streaming wrapper (AES-128-CTR) - same ~0% overhead in stream mode (Recommended in every case).
+// Format-deniability ITB masking via outer-cipher wrapper (AES-128-CTR) ~0% overhead (Recommended in every case).
 {
     let mut writer = WrapStreamWriter::new(Cipher::Aes128Ctr, &outer_key)?;
     let mut fin  = BufReader::new(File::open(format!("{ENC_PATH}.inner"))?);
@@ -260,7 +260,7 @@ let outer_key = wrapper::generate_key(Cipher::Aes128Ctr)?;
     let fout = BufWriter::new(File::create(format!("{ENC_PATH}.inner"))?);
     itb::encrypt_stream_auth(&noise, &data, &start, &mac, fin, fout, CHUNK_SIZE)?;
 }
-// Format-deniability ITB masking via outer-cipher streaming wrapper (AES-128-CTR) - same ~0% overhead in stream mode (Recommended in every case).
+// Format-deniability ITB masking via outer-cipher wrapper (AES-128-CTR) ~0% overhead (Recommended in every case).
 {
     let mut writer = WrapStreamWriter::new(Cipher::Aes128Ctr, &outer_key)?;
     let mut fin  = BufReader::new(File::open(format!("{ENC_PATH}.inner"))?);
@@ -401,7 +401,7 @@ let plaintext = b"any text or binary data - including 0x00 bytes";
 let mut encrypted = enc.encrypt_auth(plaintext).unwrap();
 println!("encrypted: {} bytes", encrypted.len());
 
-// Format-deniability ITB masking through outer cipher AES-128-CTR with ~0% overhead over ITB Encrypt / Decrypt (Recommended in every case).
+// Format-deniability ITB masking via outer-cipher wrapper (AES-128-CTR) ~0% overhead (Recommended in every case).
 let nonce = wrapper::wrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut encrypted).unwrap();
 let mut wire = nonce;
 wire.extend_from_slice(&encrypted);
@@ -576,7 +576,7 @@ let plaintext = b"mixed-primitive Easy Mode payload";
 let mut encrypted = enc.encrypt_auth(plaintext).unwrap();
 println!("encrypted: {} bytes", encrypted.len());
 
-// Format-deniability ITB masking through outer cipher AES-128-CTR with ~0% overhead over ITB Encrypt / Decrypt (Recommended in every case).
+// Format-deniability ITB masking via outer-cipher wrapper (AES-128-CTR) ~0% overhead (Recommended in every case).
 let nonce = wrapper::wrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut encrypted).unwrap();
 let mut wire = nonce;
 wire.extend_from_slice(&encrypted);
@@ -648,7 +648,7 @@ let mut enc = Encryptor::new(
 let plaintext = b"Triple Ouroboros payload";
 let mut encrypted = enc.encrypt_auth(plaintext).unwrap();
 
-// Format-deniability ITB masking through outer cipher AES-128-CTR with ~0% overhead over ITB Encrypt / Decrypt (Recommended in every case).
+// Format-deniability ITB masking via outer-cipher wrapper (AES-128-CTR) ~0% overhead (Recommended in every case).
 let nonce = wrapper::wrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut encrypted).unwrap();
 let mut wire = nonce;
 wire.extend_from_slice(&encrypted);
@@ -732,7 +732,7 @@ let plaintext = b"any text or binary data - including 0x00 bytes";
 let mut encrypted = encrypt_auth(&ns, &ds, &ss, &mac, plaintext).unwrap();
 println!("encrypted: {} bytes", encrypted.len());
 
-// Format-deniability ITB masking through outer cipher AES-128-CTR with ~0% overhead over ITB Encrypt / Decrypt (Recommended in every case).
+// Format-deniability ITB masking via outer-cipher wrapper (AES-128-CTR) ~0% overhead (Recommended in every case).
 let nonce = wrapper::wrap_in_place(Cipher::Aes128Ctr, &outer_key, &mut encrypted).unwrap();
 let mut wire = nonce;
 wire.extend_from_slice(&encrypted);

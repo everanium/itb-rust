@@ -55,6 +55,7 @@ itb = { path = "bindings/rust" }
 Build once before running tests or examples:
 
 ```bash
+cd bindings/rust/
 cargo build --release
 ```
 
@@ -62,7 +63,29 @@ Crate metadata: `name = "itb"`, `version = "0.1.0"`, `edition =
 "2021"`, `license = "MIT"`. The only runtime dependency is
 `libloading = "0.9"`.
 
-## Run the integration test suite
+## Library lookup order
+
+1. `ITB_LIBRARY_PATH` environment variable (absolute path).
+2. `<repo>/dist/<os>-<arch>/libitb.<ext>` resolved by walking up
+   from `CARGO_MANIFEST_DIR` (`bindings/rust/` → repo root →
+   `dist/<os>-<arch>/`).
+3. System loader path (`ld.so.cache`, `DYLD_LIBRARY_PATH`, `PATH`).
+
+## Memory
+
+Two process-wide knobs constrain Go runtime arena pacing. Both readable at libitb load time via env vars:
+
+- `ITB_GOMEMLIMIT=512MiB` — soft memory limit in bytes; supports `B` / `KiB` / `MiB` / `GiB` / `TiB` suffixes.
+- `ITB_GOGC=20` — GC trigger percentage; default `100`, lower triggers GC more aggressively.
+
+Programmatic setters override env-set values at any time. Pass `-1` to either setter to query the current value without changing it.
+
+```rust
+itb::set_memory_limit(512 << 20);
+itb::set_gc_percent(20);
+```
+
+## Tests
 
 ```bash
 ./bindings/rust/run_tests.sh
@@ -77,13 +100,32 @@ mirrors the cross-binding coverage: Single + Triple Ouroboros,
 mixed primitives, authenticated paths, blob round-trip, streaming
 chunked I/O, error paths, lockSeed lifecycle.
 
-## Library lookup order
+## Benchmarks
 
-1. `ITB_LIBRARY_PATH` environment variable (absolute path).
-2. `<repo>/dist/<os>-<arch>/libitb.<ext>` resolved by walking up
-   from `CARGO_MANIFEST_DIR` (`bindings/rust/` → repo root →
-   `dist/<os>-<arch>/`).
-3. System loader path (`ld.so.cache`, `DYLD_LIBRARY_PATH`, `PATH`).
+A custom Go-bench-style harness lives under `benches/` and covers
+the four ops (`encrypt`, `decrypt`, `encrypt_auth`,
+`decrypt_auth`) across the nine PRF-grade primitives plus one
+mixed-primitive variant for both Single and Triple Ouroboros at
+1024-bit ITB key width and 16 MiB payload. See
+[`benches/README.md`](benches/README.md) for invocation /
+environment variables / output format and
+[`benches/BENCH.md`](benches/BENCH.md) for recorded throughput
+results across the canonical pass matrix.
+
+The four-pass canonical sweep (Single + Triple × ±LockSeed) that
+fills `benches/BENCH.md` is driven by the wrapper script in the
+binding root:
+
+```bash
+./bindings/rust/run_bench.sh                  # full 4-pass canonical sweep
+./bindings/rust/run_bench.sh --lockseed-only  # pass 3 + pass 4 only
+```
+
+The harness sets `LD_LIBRARY_PATH` to `dist/linux-amd64/`,
+manages `ITB_LOCKSEED` per pass, and forwards `ITB_NONCE_BITS` /
+`ITB_BENCH_FILTER` / `ITB_BENCH_MIN_SEC` straight through to the
+underlying `cargo bench --bench bench_single` /
+`cargo bench --bench bench_triple` invocations.
 
 ## Streaming AEAD
 
@@ -106,7 +148,7 @@ const CHUNK_SIZE: usize = 16 * 1024 * 1024;
 let mut enc = itb::Encryptor::new(Some("areion512"), Some(1024),
                                   Some("hmac-blake3"), 1)?;
 
-// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB Inner seeds + PRF key keep as CSPRNG derived.
 let outer_key = wrapper::generate_key(Cipher::Aes128Ctr)?;
 
 // Sender — encrypt to an intermediate file, then wrap end-to-end
@@ -209,7 +251,7 @@ let mut mac_key = [0u8; 32];
 File::open("/dev/urandom")?.read_exact(&mut mac_key)?;
 let mac = itb::MAC::new("hmac-blake3", &mac_key)?;
 
-// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB Inner seeds + PRF key keep as CSPRNG derived.
 let outer_key = wrapper::generate_key(Cipher::Aes128Ctr)?;
 
 // Sender — encrypt to an intermediate file, then wrap end-to-end.
@@ -305,7 +347,7 @@ across the Easy Mode bench surface.
 use itb::{peek_config, Encryptor};
 use itb::wrapper::{self, Cipher, UnwrapStreamReader, WrapStreamWriter};
 
-// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB Inner seeds + PRF key keep as CSPRNG derived.
 let outer_key = wrapper::generate_key(Cipher::Aes128Ctr).unwrap();
 
 // Per-instance configuration — mutates only this encryptor's
@@ -482,7 +524,7 @@ restore.
 use itb::Encryptor;
 use itb::wrapper::{self, Cipher};
 
-// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB Inner seeds + PRF key keep as CSPRNG derived.
 let outer_key = wrapper::generate_key(Cipher::Aes128Ctr).unwrap();
 
 // Per-slot primitive selection (Single Ouroboros, 3 + 1 slots).
@@ -591,7 +633,7 @@ seeds (one shared `noiseSeed` plus three `dataSeed` and three
 use itb::Encryptor;
 use itb::wrapper::{self, Cipher};
 
-// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB Inner seeds + PRF key keep as CSPRNG derived.
 let outer_key = wrapper::generate_key(Cipher::Aes128Ctr).unwrap();
 
 // mode=3 selects Triple Ouroboros. All other constructor arguments
@@ -679,7 +721,7 @@ ns.attach_lock_seed(&ls).unwrap();
 let mac_key = [0u8; 32];
 let mac = MAC::new("hmac-blake3", &mac_key).unwrap();
 
-// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB inner PRF + seeds keep CSPRNG-fresh randomness per call.
+// Outer cipher key - preferred surface for HKDF / ML-KEM / key-rotation policy in user-side application. ITB Inner seeds + PRF key keep as CSPRNG derived.
 let outer_key = wrapper::generate_key(Cipher::Aes128Ctr).unwrap();
 
 let plaintext = b"any text or binary data - including 0x00 bytes";
@@ -911,6 +953,18 @@ All seeds passed to one `encrypt` / `decrypt` call must share the
 same native hash width. Mixing widths raises
 `ITBError(STATUS_SEED_WIDTH_MIX)`.
 
+## MAC primitives
+
+Names match the libitb MAC registry; ordering matches that registry's declaration order.
+
+| MAC | Key bytes | Tag bytes | Underlying primitive |
+|---|---|---|---|
+| `kmac256` | 32 | 32 | KMAC256 (Keccak-derived) |
+| `hmac-sha256` | 32 | 32 | HMAC over SHA-256 |
+| `hmac-blake3` | 32 | 32 | HMAC over BLAKE3 |
+
+`kmac256` and `hmac-sha256` accept keys 16 bytes and longer; the binding fleet's tests and examples use 32 bytes uniformly across primitives for cross-binding consistency. `hmac-blake3` requires exactly 32 bytes by construction.
+
 ## Process-wide configuration
 
 Every setter takes effect for all subsequent encrypt / decrypt
@@ -1047,32 +1101,30 @@ cipher entry point. Pass at least one byte.
 | 24 | `STATUS_STREAM_AFTER_FINAL` | Streaming AEAD transcript carries chunk bytes after the terminator; surfaced by the binding's stream loop as `ITBError` carrying this status |
 | 99 | `STATUS_INTERNAL` | Generic "internal" sentinel for paths the caller cannot recover from at the binding layer |
 
-## Benchmarks
+## Constraints
 
-A custom Go-bench-style harness lives under `benches/` and covers
-the four ops (`encrypt`, `decrypt`, `encrypt_auth`,
-`decrypt_auth`) across the nine PRF-grade primitives plus one
-mixed-primitive variant for both Single and Triple Ouroboros at
-1024-bit ITB key width and 16 MiB payload. See
-[`benches/README.md`](benches/README.md) for invocation /
-environment variables / output format and
-[`benches/BENCH.md`](benches/BENCH.md) for recorded throughput
-results across the canonical pass matrix.
+- **Rust 1.70 minimum (edition 2021).** The crate's `Cargo.toml`
+  declares `edition = "2021"` and `rust-version = "1.70"`. Earlier
+  toolchains lack stabilised `let ... else` and other ergonomics the
+  wrapper layer relies on.
+- **Single crate.** All consumer-visible declarations live under
+  `bindings/rust/src/`; the FFI substrate is the `sys` submodule kept
+  separate so audits can read it independently.
+- **libitb.so required at runtime.** The crate links against
+  `dist/<os>-<arch>/libitb.<ext>` — the shared library must be built
+  first and reachable through the loader's search path (compile-time
+  `-L` plus runtime `RPATH` or `LD_LIBRARY_PATH`).
+- **No external runtime deps beyond libstd + libitb.so.** The crate
+  uses only the Rust standard library; no third-party runtime
+  dependencies are pulled in.
+- **Frozen C ABI.** The `ITB_*` exports declared in the `sys`
+  submodule (synced from `dist/<os>-<arch>/libitb.h`) are the
+  contract; the binding does not extend or reshape them.
+- **No `dlopen`.** Symbols are bound at link time. Consumers wanting
+  runtime FFI loading can wrap this crate's `sys` layer in their own
+  `libloading` shim.
 
-The four-pass canonical sweep (Single + Triple × ±LockSeed) that
-fills `benches/BENCH.md` is driven by the wrapper script in the
-binding root:
-
-```bash
-./bindings/rust/run_bench.sh                  # full 4-pass canonical sweep
-./bindings/rust/run_bench.sh --lockseed-only  # pass 3 + pass 4 only
-```
-
-The harness sets `LD_LIBRARY_PATH` to `dist/linux-amd64/`,
-manages `ITB_LOCKSEED` per pass, and forwards `ITB_NONCE_BITS` /
-`ITB_BENCH_FILTER` / `ITB_BENCH_MIN_SEC` straight through to the
-underlying `cargo bench --bench bench_single` /
-`cargo bench --bench bench_triple` invocations.
+## API Overview
 
 [`Encryptor`]: src/encryptor.rs
 [`Encryptor::new`]: src/encryptor.rs
@@ -1121,6 +1173,8 @@ underlying `cargo bench --bench bench_single` /
 [`itb::version`]: src/registry.rs
 [`itb::list_macs`]: src/registry.rs
 [`itb::list_hashes`]: src/registry.rs
+[`itb::set_memory_limit`]: src/registry.rs
+[`itb::set_gc_percent`]: src/registry.rs
 [`itb::STATUS_MAC_FAILURE`]: src/lib.rs
 [`itb::STATUS_EASY_MISMATCH`]: src/lib.rs
 [`itb::STATUS_SEED_WIDTH_MIX`]: src/lib.rs

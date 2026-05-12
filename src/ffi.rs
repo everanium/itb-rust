@@ -282,6 +282,8 @@ pub type FnSetNonceBits = unsafe extern "C" fn(c_int) -> c_int;
 pub type FnGetNonceBits = unsafe extern "C" fn() -> c_int;
 pub type FnSetBarrierFill = unsafe extern "C" fn(c_int) -> c_int;
 pub type FnGetBarrierFill = unsafe extern "C" fn() -> c_int;
+pub type FnSetMemoryLimit = unsafe extern "C" fn(i64) -> i64;
+pub type FnSetGCPercent = unsafe extern "C" fn(c_int) -> c_int;
 
 pub type FnParseChunkLen =
     unsafe extern "C" fn(*const c_void, usize, *mut usize) -> c_int;
@@ -527,6 +529,8 @@ pub(crate) struct LibItb {
     pub(crate) ITB_GetNonceBits: FnGetNonceBits,
     pub(crate) ITB_SetBarrierFill: FnSetBarrierFill,
     pub(crate) ITB_GetBarrierFill: FnGetBarrierFill,
+    pub(crate) ITB_SetMemoryLimit: FnSetMemoryLimit,
+    pub(crate) ITB_SetGCPercent: FnSetGCPercent,
 
     pub(crate) ITB_ParseChunkLen: FnParseChunkLen,
     pub(crate) ITB_MaxKeyBits: FnMaxKeyBits,
@@ -708,6 +712,8 @@ impl LibItb {
                 ITB_GetNonceBits: sym!(b"ITB_GetNonceBits"),
                 ITB_SetBarrierFill: sym!(b"ITB_SetBarrierFill"),
                 ITB_GetBarrierFill: sym!(b"ITB_GetBarrierFill"),
+                ITB_SetMemoryLimit: sym!(b"ITB_SetMemoryLimit"),
+                ITB_SetGCPercent: sym!(b"ITB_SetGCPercent"),
 
                 ITB_ParseChunkLen: sym!(b"ITB_ParseChunkLen"),
                 ITB_MaxKeyBits: sym!(b"ITB_MaxKeyBits"),

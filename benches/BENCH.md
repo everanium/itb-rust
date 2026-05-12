@@ -32,7 +32,7 @@ hosts without AVX-512+VL the Go side automatically nil-routes the
 4-lane batched chain-absorb arm so the per-pixel hash falls
 through to the upstream stdlib asm via the single Func — see the
 build-tag table in [`../README.md`](../README.md) for the
-`-tags=purego` / `-tags=noitbasm` opt-outs.
+`-tags=noitbasm` opt-outs.
 
 ## Intel Core i7-11700K (16 HT, native Linux, c-shared mode)
 

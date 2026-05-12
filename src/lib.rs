@@ -50,8 +50,8 @@ pub use error::{last_error, ITBError};
 pub use registry::{
     channels, get_barrier_fill, get_bit_soup, get_lock_soup, get_max_workers,
     get_nonce_bits, header_size, list_hashes, list_macs, max_key_bits,
-    parse_chunk_len, set_barrier_fill, set_bit_soup, set_lock_soup,
-    set_max_workers, set_nonce_bits, version,
+    parse_chunk_len, set_barrier_fill, set_bit_soup, set_gc_percent,
+    set_lock_soup, set_max_workers, set_memory_limit, set_nonce_bits, version,
 };
 pub use seed::Seed;
 pub use mac::MAC;

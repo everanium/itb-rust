@@ -1,6 +1,6 @@
 //! Rust eitb — runs every wrapper × ITB example end-to-end.
 //!
-//! Mirrors `cmd/eitb/main.go` adapted to the Rust binding asymmetry:
+//! Mirrors `tools/eitb/main.go` adapted to the Rust binding asymmetry:
 //! the binding has no `std::io::Write` / `std::io::Read` adapter pair
 //! for Non-AEAD streaming wrap surfaces (Streaming AEAD does have
 //! file-like helpers, but the wrap layer still goes through the
@@ -82,7 +82,7 @@ fn rand_bytes(n: usize) -> Vec<u8> {
 }
 
 fn sha256_short(b: &[u8]) -> String {
-    // Lightweight inline SHA-256 — mirrors what `cmd/eitb` prints. To
+    // Lightweight inline SHA-256 — mirrors what `tools/eitb` prints. To
     // avoid pulling a new dependency, use an FFI-free hashing path:
     // since `libitb` itself does not export SHA-256, fall back to a
     // simple FNV-1a 64-bit fingerprint that is sufficient for the
@@ -538,7 +538,7 @@ fn examples() -> [Example; 8] {
 }
 
 fn parse_args() -> (String, String, bool) {
-    // Minimal arg parser; mirrors `cmd/eitb` flag shape without
+    // Minimal arg parser; mirrors `tools/eitb` flag shape without
     // pulling clap as a dev dep.
     let mut example_filter = String::new();
     let mut cipher_filter = String::new();

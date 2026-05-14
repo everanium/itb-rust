@@ -279,8 +279,7 @@ use itb::{Seed, MAC};
 const STREAM_PRIMITIVE: &str = "areion512";
 const STREAM_TOTAL_BYTES: usize = 64 << 20;
 const STREAM_CHUNK_BYTES: usize = 16 << 20;
-// Fixed 32-byte MAC key — matches the canonical .NEXTBIND.md /
-// .MACSTREAM.md MAC-key length and `MAC::new`'s 32-byte hmac-blake3
+// Fixed 32-byte MAC key matches `MAC::new`'s 32-byte hmac-blake3
 // requirement. Value contents are immaterial for throughput
 // measurement; the MAC executes in O(MAC-key-length) per absorb
 // regardless of byte distribution.

@@ -1230,8 +1230,7 @@ impl Encryptor {
     /// bound primitive / key-bits / mode / MAC closure. Plaintext may
     /// be empty when `final_flag = true`.
     ///
-    /// Reuses the per-encryptor `out_buf` cache (Bonus 1 in
-    /// .NEXTBIND.md §7.1) — same scope as the Single Message
+    /// Reuses the per-encryptor `out_buf` cache. Same scope as the Single Message
     /// [`Encryptor::cipher_call`] path — so the streaming hot loop
     /// amortises the allocation across every chunk just like the
     /// Single Message Easy Mode path does. Returns
@@ -1304,8 +1303,8 @@ impl Encryptor {
     /// `(plaintext, final_flag)` on a verified chunk; surfaces
     /// `STATUS_MAC_FAILURE` on tampered transcript.
     ///
-    /// Reuses the per-encryptor `out_buf` cache (Bonus 1 in
-    /// .NEXTBIND.md §7.1) — see [`Encryptor::easy_emit_chunk_auth`]
+    /// Reuses the per-encryptor `out_buf` cache.
+    /// See [`Encryptor::easy_emit_chunk_auth`]
     /// for the rationale.
     fn easy_consume_chunk_auth(
         &mut self,

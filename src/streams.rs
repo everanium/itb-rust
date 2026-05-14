@@ -800,10 +800,9 @@ fn ensure_stream_cache(cache: &mut Vec<u8>, need: usize) {
 /// — so probe-then-retry doubles cipher work per call).
 ///
 /// When `cache` is provided, the per-stream buffer is reused instead
-/// of allocating a fresh `Vec<u8>` per chunk (Bonus 1b in
-/// .NEXTBIND.md §7.1). When `None`, falls back to the per-call
-/// allocation — preserves any future call site that has no
-/// stream-class cache to attach.
+/// of allocating a fresh `Vec<u8>` per chunk. When `None`,
+/// falls back to the per-call allocation — preserves any future call
+/// site that has no stream-class cache to attach.
 #[allow(clippy::too_many_arguments)]
 fn emit_chunk_auth_single(
     width: i32,
@@ -884,9 +883,8 @@ fn emit_chunk_auth_single(
 /// + retry-once on BUFFER_TOO_SMALL; see `emit_chunk_auth_single`.
 ///
 /// When `cache` is provided, the per-stream buffer is reused instead
-/// of allocating a fresh `Vec<u8>` per chunk (Bonus 1b in
-/// .NEXTBIND.md §7.1). When `None`, falls back to the per-call
-/// allocation.
+/// of allocating a fresh `Vec<u8>` per chunk. When `None`,
+/// falls back to the per-call allocation.
 #[allow(clippy::too_many_arguments)]
 fn emit_chunk_auth_triple(
     width: i32,
@@ -982,9 +980,8 @@ fn emit_chunk_auth_triple(
 /// pre-allocation is generous.
 ///
 /// When `cache` is provided, the per-stream buffer is reused instead
-/// of allocating a fresh `Vec<u8>` per chunk (Bonus 1b in
-/// .NEXTBIND.md §7.1). When `None`, falls back to the per-call
-/// allocation.
+/// of allocating a fresh `Vec<u8>` per chunk. When `None`,
+/// falls back to the per-call allocation.
 #[allow(clippy::too_many_arguments)]
 fn consume_chunk_auth_single(
     width: i32,
@@ -1064,9 +1061,8 @@ fn consume_chunk_auth_single(
 /// + retry-once on BUFFER_TOO_SMALL; see `emit_chunk_auth_single`.
 ///
 /// When `cache` is provided, the per-stream buffer is reused instead
-/// of allocating a fresh `Vec<u8>` per chunk (Bonus 1b in
-/// .NEXTBIND.md §7.1). When `None`, falls back to the per-call
-/// allocation.
+/// of allocating a fresh `Vec<u8>` per chunk. When `None`,
+/// falls back to the per-call allocation.
 #[allow(clippy::too_many_arguments)]
 fn consume_chunk_auth_triple(
     width: i32,
@@ -1183,10 +1179,10 @@ pub struct StreamEncryptorAuth<'a, W: Write> {
     closed: bool,
     prefix_emitted: bool,
     /// Per-stream output buffer cache. Grows on demand; `close` /
-    /// `Drop` wipe it before drop. Same Bonus 1b shape as the
+    /// `Drop` wipe it before drop. Same shape as the
     /// per-encryptor cache on `Encryptor` — the streaming class owns
     /// its own cache because the helper free functions have no
-    /// encryptor instance to attach to (.NEXTBIND.md §7.1).
+    /// encryptor instance to attach to.
     out_buf: Vec<u8>,
 }
 
@@ -1352,10 +1348,9 @@ pub struct StreamDecryptorAuth<'a, W: Write> {
     buf: Vec<u8>,
     seen_final: bool,
     closed: bool,
-    /// Per-stream output buffer cache. Same Bonus 1b shape as the
+    /// Per-stream output buffer cache. Same shape as the
     /// encrypt-side counterpart; reused across every chunk's decrypt
-    /// dispatch instead of a fresh `Vec<u8>` per chunk
-    /// (.NEXTBIND.md §7.1).
+    /// dispatch instead of a fresh `Vec<u8>` per chunk.
     out_buf: Vec<u8>,
 }
 
@@ -1532,9 +1527,9 @@ pub struct StreamEncryptorAuth3<'a, W: Write> {
     buf: Vec<u8>,
     closed: bool,
     prefix_emitted: bool,
-    /// Per-stream output buffer cache. Same Bonus 1b shape as
+    /// Per-stream output buffer cache. Same shape as
     /// `StreamEncryptorAuth.out_buf`; reused across every chunk's
-    /// encrypt dispatch (.NEXTBIND.md §7.1).
+    /// encrypt dispatch.
     out_buf: Vec<u8>,
 }
 
@@ -1688,9 +1683,9 @@ pub struct StreamDecryptorAuth3<'a, W: Write> {
     buf: Vec<u8>,
     seen_final: bool,
     closed: bool,
-    /// Per-stream output buffer cache. Same Bonus 1b shape as
+    /// Per-stream output buffer cache. Same shape as
     /// `StreamDecryptorAuth.out_buf`; reused across every chunk's
-    /// decrypt dispatch (.NEXTBIND.md §7.1).
+    /// decrypt dispatch.
     out_buf: Vec<u8>,
 }
 

@@ -1,0 +1,42 @@
+[package]
+name = "libitb3"
+version = "0.5.1"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0"
+authors = ["Andrey Kuvshinov <andrew@encloud.blue>"]
+description = "ITB Symmetric Cipher Construction with Ambiguity-Based Security - Rust"
+repository = "https://github.com/everanium/itb"
+homepage = "https://github.com/everanium/itb"
+documentation = "https://github.com/everanium/itb"
+readme = "README.md"
+keywords = ["cryptography", "encryption", "cipher", "symmetric", "aead"]
+categories = ["cryptography", "external-ffi-bindings", "api-bindings"]
+
+[dependencies]
+libloading = "0.9"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+criterion = "0.5"
+rand = "0.9"
+
+[lib]
+name = "itb3"
+path = "src/lib.rs"
+
+[[bench]]
+name = "bench_message"
+path = "benches/bench_message.rs"
+harness = false
+
+[[bench]]
+name = "bench_stream"
+path = "benches/bench_stream.rs"
+harness = false
+
+[[bench]]
+name = "bench_stream_one_shot"
+path = "benches/bench_stream_one_shot.rs"
+harness = false

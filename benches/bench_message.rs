@@ -1,0 +1,103 @@
+//! Message-shape throughput vs plaintext size.
+//!
+//! Bench configuration is driven by environment variables so a
+//! side-by-side comparison with the root Go bench harness is
+//! straightforward. All four override the shipped profile default;
+//! omitting them targets the Low-Level fair-comparison shape.
+//!
+//! | env var            | default   | notes                                      |
+//! |--------------------|-----------|--------------------------------------------|
+//! | ITB_NONCE_BITS     | 512       | shipped secure default                      |
+//! | ITB_KEY_BITS       | 1024      | matches root Go BENCH3.md 1024-bit table   |
+//! | ITB_WITH_PARALLAX  | false     | root Go bench runs without parallax        |
+//! | ITB_WITH_WRAPPER   | false     | root Go bench runs without the wrapper     |
+//! | ITB_INNER_HASH     | (profile) | opaque hash name                           |
+
+use std::env;
+use std::time::Duration;
+
+use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use itb3::{OptsBuilder, Pipeline, set_gc_percent, set_memory_limit};
+use rand::RngCore;
+
+fn build_opts() -> OptsBuilder {
+    let nonce_bits = env::var("ITB_NONCE_BITS")
+        .ok()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(512);
+    let key_bits = env::var("ITB_KEY_BITS")
+        .ok()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(1024);
+    let with_parallax = env::var("ITB_WITH_PARALLAX")
+        .ok()
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+    let with_wrapper = env::var("ITB_WITH_WRAPPER")
+        .ok()
+        .map(|v| v == "true" || v == "1")
+        .unwrap_or(false);
+
+    let mut opts = OptsBuilder::new()
+        .with_nonce_bits(nonce_bits)
+        .with_key_bits(key_bits)
+        .with_parallax(with_parallax)
+        .with_wrapper(with_wrapper);
+    if let Ok(name) = env::var("ITB_INNER_HASH") {
+        if !name.is_empty() {
+            opts = opts.with_inner_hash(&name);
+        }
+    }
+    if let Ok(name) = env::var("ITB_MAC_NAME") {
+        if !name.is_empty() {
+            opts = opts.with_mac_name(&name);
+        }
+    }
+    opts
+}
+
+fn profile_name() -> String {
+    env::var("ITB_PROFILE").unwrap_or_else(|_| "singlemsg-triple-nomac-v1".to_string())
+}
+
+fn bench_message(c: &mut Criterion) {
+    let _ = set_memory_limit(4 << 30);
+    let _ = set_gc_percent(100);
+    let opts = build_opts();
+    let pipe = Pipeline::init(&profile_name(), &opts).unwrap();
+    let mut group = c.benchmark_group("encrypt_message");
+    group
+        .sample_size(10)
+        .measurement_time(Duration::from_secs(5));
+    for size in [1usize << 20, 16 << 20, 64 << 20] {
+        let mut plain = vec![0u8; size];
+        // CSPRNG-fill so plaintext content matches the root Go bench
+        // (crypto/rand). Not in the timing loop.
+        rand::rng().fill_bytes(&mut plain);
+        group.throughput(Throughput::Bytes(size as u64));
+        group.bench_function(format!("{size}B"), |b| {
+            b.iter(|| pipe.encrypt_message(&plain).unwrap());
+        });
+    }
+    group.finish();
+
+    // Decrypt-side counterpart: pre-encrypt one wire per size outside
+    // the timing loop, then time decrypt_message on that wire.
+    let mut dec_group = c.benchmark_group("decrypt_message");
+    dec_group
+        .sample_size(10)
+        .measurement_time(Duration::from_secs(5));
+    for size in [1usize << 20, 16 << 20, 64 << 20] {
+        let mut plain = vec![0u8; size];
+        rand::rng().fill_bytes(&mut plain);
+        let wire = pipe.encrypt_message(&plain).unwrap();
+        dec_group.throughput(Throughput::Bytes(size as u64));
+        dec_group.bench_function(format!("{size}B"), |b| {
+            b.iter(|| pipe.decrypt_message(&wire).unwrap());
+        });
+    }
+    dec_group.finish();
+}
+
+criterion_group!(benches, bench_message);
+criterion_main!(benches);

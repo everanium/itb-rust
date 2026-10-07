@@ -89,6 +89,10 @@ impl OptsBuilder {
         self.with_raw("outerCipher", name)
     }
 
+    pub fn with_drbg(self, name: &str) -> Self {
+        self.with_raw("drbg", name)
+    }
+
     /// Comma-joins the palette names (`parallaxPalette`).
     pub fn with_parallax_palette(self, names: &[&str]) -> Self {
         self.with_raw("parallaxPalette", &names.join(","))
@@ -162,6 +166,7 @@ mod tests {
             .with_mac_name("hmac-blake3")
             .with_inner_hash("areion512")
             .with_outer_cipher("chacha20")
+            .with_drbg("csprng")
             .with_parallax_palette(&["aescmac", "chacha20", "blake3"])
             .build();
         assert_eq!(
@@ -169,7 +174,7 @@ mod tests {
             "pm=ab01&wm=cdef&withParallax=true&withWrapper=false&\
              maxWorkers=4&nonceBits=512&barrierFill=4&chunkSize=4096&\
              keyBits=1024&parallaxSegmentSize=65536&macName=hmac-blake3&\
-             innerHash=areion512&outerCipher=chacha20&\
+             innerHash=areion512&outerCipher=chacha20&drbg=csprng&\
              parallaxPalette=aescmac,chacha20,blake3"
         );
     }

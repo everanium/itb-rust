@@ -13,8 +13,8 @@ compiler at install time, no compile-time link; the `.so` / `.dylib`
 MAC-name / cipher-name / profile-name is an opaque string passed
 through to Go for validation; the binding carries no ITB construction
 logic. The public surface is one `Pipeline` type (Init / Load / Save
-/ Rekey / Close, Single Message encrypt / decrypt, buffered and
-incremental stream sessions with `io::Read` / `io::Write` pumps), an
+/ Rekey / Close, Single Message encrypt / decrypt, one-shot stream calls,
+buffered and incremental stream sessions with `io::Read` / `io::Write` pumps), an
 `OptsBuilder` query-string builder for Init overrides, the `Profile`
 record with `register` / `lookup` / `profiles` / `inspect`, and the Go
 runtime knobs.
@@ -146,15 +146,10 @@ library directly and register the same custom primitive under the
 same name before opening. Attempting to `load` such a blob through
 this binding surfaces `ItbStatus::RecipePrimitiveUnknown`.
 
-**Runtime tuning.** The worker cap is per-machine and never travels
-in the blob; the receiver may pick its own after `load`:
-
-```rust,no_run
-# use itb3::{OptsBuilder, Pipeline};
-# let receiver = Pipeline::init("singlemsg-triple-mac-v1", &OptsBuilder::new())?;
-receiver.max_workers(4)?;   // clamped by libitb3; <= 0 selects auto
-# Ok::<(), itb3::ItbError>(())
-```
+**Runtime tuning.** `receiver.max_workers(n)` sets the worker cap for
+every subsequent cipher call (`n <= 0` selects auto, `n > 256` is
+clamped to 256); the receiver may pick its own worker cap after
+`load` — the cap is per-machine and never written to the blob.
 
 ## Profile registry
 
@@ -202,7 +197,8 @@ cargo (e.g. `./run_tests.sh --test smoke`). The suite covers Single
 Message round trips per shipped profile, stream pumps, incremental
 sessions with pathological batch sizes, tampered-wire failure
 stickiness, mid-flight cancellation, rekey, save / load persistence,
-inspect, profile registration, and error mapping — surface parity checks; the deep suite lives in Go
+inspect, profile registration, and error mapping — surface parity
+checks; the deep suite lives in Go
 under the shipped tree.
 
 ## Benchmarking
@@ -211,10 +207,12 @@ under the shipped tree.
 ./bindings/rust/run_bench.sh
 ```
 
-Criterion micro-benches: `encrypt_message` and `encrypt_stream_pump`
-throughput at 1 KiB / 64 KiB / 1 MiB / 16 MiB. Positional arguments
-are forwarded to the Criterion harness (e.g.
-`./run_bench.sh --measurement-time 5`).
+Criterion micro-benches: `encrypt_message`, `encrypt_stream_pump` and
+`encrypt_stream_one_shot` throughput at 1 MiB / 16 MiB / 64 MiB.
+Positional arguments are forwarded to the Criterion harness (e.g.
+`./run_bench.sh --measurement-time 5`). See
+[`bindings/BENCH.md`](https://github.com/everanium/itb/blob/main/bindings/BENCH.md)
+for the fleet-wide configuration authority and comparison tables.
 
 ## itb3 CLI
 
@@ -226,6 +224,27 @@ payloads directly on disk (`-i` / `-o`) or through stdin / stdout,
 rotates outer masters, and inspects stored blobs. See
 [`cmd/itb3/README.md`](https://github.com/everanium/itb/blob/main/cmd/itb3/README.md) for the full
 subcommand reference.
+
+## loop utility
+
+A long-run stress harness under `bindings/rust/loop/` holds one
+Pipeline handle for minutes, cycles encrypt → decrypt → compare
+round-trips through it, rotates the outer masters and reopens the
+handle from its session blob on a schedule, and reports whether the
+process survived with every byte intact. It is the binding-side
+counterpart of the Go harness under `tools/loop`: same flags, same
+round structure, same summary in both renderings.
+
+```bash
+cd bindings/rust/loop && cargo build --release
+../run_loop.sh --duration 2m --shape both
+```
+
+`./target/release/loop -h` lists every flag. Concurrency mode: **shared-handle** —
+OS threads call into one Pipeline handle concurrently, which
+libitb3 permits once the handle is constructed and the binding's
+`Pipeline` type allows (it is `Send + Sync`), so `--goroutines` is
+the thread count verbatim.
 
 ## eitb utility
 

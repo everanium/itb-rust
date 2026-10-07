@@ -17,7 +17,11 @@ fn save_then_load_round_trip() {
     let receiver = Pipeline::load(&blob, None).unwrap();
     let wire = sender.encrypt_message(b"in-memory").unwrap();
     assert_eq!(receiver.decrypt_message(&wire).unwrap(), b"in-memory");
-    assert_eq!(receiver.save().unwrap(), blob, "load retains the blob bytes");
+    assert_eq!(
+        receiver.save().unwrap(),
+        blob,
+        "load retains the blob bytes"
+    );
 }
 
 #[test]
@@ -77,6 +81,7 @@ fn inspect_reads_the_embedded_profile() {
         Profile {
             nonce_bits: None,
             barrier_fill: None,
+            container_mode: None,
             ..prof.clone()
         },
         registry,
@@ -141,4 +146,64 @@ fn max_workers_clamps_and_round_trips() {
     receiver.max_workers(1).unwrap();
     let wire = sender.encrypt_message(b"workers").unwrap();
     assert_eq!(receiver.decrypt_message(&wire).unwrap(), b"workers");
+}
+
+#[test]
+fn drbg_choice_round_trips_and_travels_in_the_blob() {
+    for name in ["csprng", "aesitb128"] {
+        let sender = Pipeline::init(
+            "singlemsg-triple-mac-v1",
+            &OptsBuilder::new().with_drbg(name),
+        )
+        .unwrap();
+        let blob = sender.save().unwrap();
+        let receiver = Pipeline::load(&blob, None).unwrap();
+        let wire = sender.encrypt_message(b"drbg payload").unwrap();
+        assert_eq!(receiver.decrypt_message(&wire).unwrap(), b"drbg payload");
+        let back = receiver.encrypt_message(b"drbg reply").unwrap();
+        assert_eq!(sender.decrypt_message(&back).unwrap(), b"drbg reply");
+
+        // The choice is a recipe field: inspect reports it.
+        let prof = inspect(&blob).unwrap();
+        assert_eq!(prof.drbg, name);
+        assert!(prof.to_json().contains(&format!("\"drbg\":\"{name}\"")));
+    }
+}
+
+#[test]
+fn drbg_is_absent_by_default() {
+    let sender = Pipeline::init("singlemsg-triple-mac-v1", &OptsBuilder::new()).unwrap();
+    let prof = inspect(&sender.save().unwrap()).unwrap();
+    assert!(prof.drbg.is_empty());
+    assert!(!prof.to_json().contains("drbg"));
+    let registry = lookup("singlemsg-triple-mac-v1").unwrap();
+    assert!(registry.drbg.is_empty());
+    assert!(!registry.to_json().contains("drbg"));
+}
+
+#[test]
+fn register_copy_of_an_inspected_record_keeps_drbg() {
+    let sender = Pipeline::init(
+        "singlemsg-triple-mac-v1",
+        &OptsBuilder::new().with_drbg("csprng"),
+    )
+    .unwrap();
+    // drbg is a recipe field and stays; the inspection-only fields
+    // and the name are cleared before registering the copy.
+    let copy = Profile {
+        name: String::new(),
+        nonce_bits: None,
+        barrier_fill: None,
+        container_mode: None,
+        ..inspect(&sender.save().unwrap()).unwrap()
+    };
+    assert_eq!(copy.drbg, "csprng");
+    itb3::register("rust-binding-test-drbg-copy", &copy).unwrap();
+    let back = lookup("rust-binding-test-drbg-copy").unwrap();
+    assert_eq!(back.drbg, "csprng");
+    assert!(back.to_json().contains("\"drbg\":\"csprng\""));
+    let p = Pipeline::init("rust-binding-test-drbg-copy", &OptsBuilder::new()).unwrap();
+    let receiver = Pipeline::load(&p.save().unwrap(), None).unwrap();
+    let wire = p.encrypt_message(b"registered drbg").unwrap();
+    assert_eq!(receiver.decrypt_message(&wire).unwrap(), b"registered drbg");
 }

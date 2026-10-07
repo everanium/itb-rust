@@ -33,7 +33,10 @@ pub use error::{ItbError, ItbResult};
 pub use opts::OptsBuilder;
 pub use pipeline::{Pipeline, inspect};
 pub use profile::Profile;
-pub use register::{lookup, profiles, register};
-pub use runtime::{set_gc_percent, set_memory_limit, version};
+pub use register::{hash_names, lookup, profiles, register};
+pub use runtime::{
+    drbg_auto_tier, pool_stats, pool_stats_len, set_gc_percent, set_gomaxprocs, set_memory_limit,
+    version, write_heap_profile,
+};
 pub use status::ItbStatus;
 pub use stream::{DecryptStream, EncryptStream};

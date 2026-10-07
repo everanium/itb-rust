@@ -12,7 +12,11 @@ fn rekey_round_trip() {
     let wrap = [0x22u8; 32];
     let rotated = sender.rekey(&perm, &wrap).unwrap();
     assert_ne!(rotated, blob_before, "rekey must refresh the blob");
-    assert_eq!(sender.save().unwrap(), rotated, "save reports the rotated blob");
+    assert_eq!(
+        sender.save().unwrap(),
+        rotated,
+        "save reports the rotated blob"
+    );
 
     let receiver = Pipeline::load(&rotated, None).unwrap();
     let plain = b"post-rekey payload".to_vec();

@@ -1,4 +1,5 @@
-//! Profile registry access: register / lookup / profiles.
+//! Profile registry access: register / lookup / profiles, and the
+//! shipped hash-primitive registry.
 
 use std::ffi::CString;
 
@@ -17,8 +18,8 @@ const JSON_CAP: usize = 4096;
 pub fn register(name: &str, profile: &Profile) -> ItbResult<()> {
     let s = ffi::syms()?;
     let name_c = CString::new(name).map_err(|_| ItbError::Ffi("profile name contains NUL"))?;
-    let json_c = CString::new(profile.to_json())
-        .map_err(|_| ItbError::Ffi("profile JSON contains NUL"))?;
+    let json_c =
+        CString::new(profile.to_json()).map_err(|_| ItbError::Ffi("profile JSON contains NUL"))?;
     // SAFETY: both pointers are NUL-terminated strings live for the
     // duration of the call.
     check(unsafe { (s.ITB_Triple_Register)(name_c.as_ptr(), json_c.as_ptr()) })
@@ -47,6 +48,18 @@ pub fn profiles() -> ItbResult<Vec<String>> {
     })?;
     let text = std::str::from_utf8(&json).map_err(ItbError::Utf8)?;
     serde_json::from_str(text).map_err(|_| ItbError::Ffi("profile list is not a JSON string array"))
+}
+
+/// Returns the shipped hash-primitive registry names in canonical
+/// order.
+pub fn hash_names() -> ItbResult<Vec<String>> {
+    let s = ffi::syms()?;
+    let json = crate::pipeline::retry_once(JSON_CAP, |buf, len| {
+        // SAFETY: buf / len are valid for the duration of the call.
+        unsafe { (s.ITB_Triple_HashNames)(buf.as_mut_ptr().cast(), buf.len(), len) }
+    })?;
+    let text = std::str::from_utf8(&json).map_err(ItbError::Utf8)?;
+    serde_json::from_str(text).map_err(|_| ItbError::Ffi("hash list is not a JSON string array"))
 }
 
 pub(crate) fn parse_profile(json: &[u8]) -> ItbResult<Profile> {

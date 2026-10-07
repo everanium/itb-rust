@@ -14,8 +14,7 @@ use itb3::{ItbStatus, OptsBuilder, Pipeline};
 fn tampered_wire_sticky_failure() {
     let opts = OptsBuilder::new();
     let sender = Pipeline::init("streaming-aead-triple-mac-v1", &opts).unwrap();
-    let receiver =
-        Pipeline::load(&sender.save().unwrap(), None).unwrap();
+    let receiver = Pipeline::load(&sender.save().unwrap(), None).unwrap();
 
     let plain: Vec<u8> = (0..65_536).map(|i| (i % 227) as u8).collect();
     let base_wire = sender.encrypt_stream_one_shot(&plain).unwrap();

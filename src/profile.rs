@@ -14,13 +14,13 @@ use serde::{Deserialize, Serialize};
 /// profile JSON object; optional keys are omitted when empty / zero
 /// and decode as their defaults when absent.
 ///
-/// `nonce_bits` and `barrier_fill` are inspection-only: they are not
-/// part of the profile recipe, carry `None` on a record from
-/// [`crate::lookup`] or built by hand, and are populated only on a
-/// record from [`crate::inspect`], where libitb3 reads them from the
-/// blob's runtime globals snapshot. libitb3 rejects a `register`
-/// payload that carries either key, so clear both before handing an
-/// inspected record to [`crate::register`].
+/// `nonce_bits`, `barrier_fill` and `container_mode` are
+/// inspection-only: they are not part of the profile recipe, carry
+/// `None` on a record from [`crate::lookup`] or built by hand, and are
+/// populated only on a record from [`crate::inspect`], where libitb3
+/// reads them from the blob's inner snapshot. libitb3 rejects a
+/// `register` payload that carries any of the keys, so clear them
+/// before handing an inspected record to [`crate::register`].
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Profile {
     /// Registry label. Empty on a record built by hand; filled by
@@ -54,6 +54,14 @@ pub struct Profile {
     /// globals. Same inspection-only lifecycle as [`Profile::nonce_bits`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub barrier_fill: Option<i64>,
+    /// Container floor sizing mode, read from the blob's inner mode
+    /// field: 1 per-region, 2 per-container. Same inspection-only
+    /// lifecycle as [`Profile::nonce_bits`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container_mode: Option<i64>,
+    /// DRBG fill primitive name; empty for the auto tier.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub drbg: String,
     /// MAC name; empty for No MAC modes.
     #[serde(default, rename = "mac", skip_serializing_if = "String::is_empty")]
     pub mac_name: String,

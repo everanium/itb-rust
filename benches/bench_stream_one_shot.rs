@@ -1,4 +1,4 @@
-//! Stream one-shot throughput vs plaintext size. Times the
+//! One-shot stream throughput vs plaintext size. Times the
 //! whole-buffer path (a single FFI round trip through the Pipeline's
 //! stream chain).
 //!
@@ -60,6 +60,9 @@ fn profile_name() -> String {
 }
 
 fn bench_stream_one_shot(c: &mut Criterion) {
+    // Bench-scale allocation churn grows the Go scratch heap
+    // unboundedly without a soft memory cap + aggressive GC; the
+    // return values report the previous settings, not an error.
     let _ = set_memory_limit(4 << 30);
     let _ = set_gc_percent(100);
     let opts = build_opts();

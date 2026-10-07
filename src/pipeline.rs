@@ -314,7 +314,9 @@ fn cstr(s: &str, msg: &'static str) -> ItbResult<CString> {
 }
 
 fn path_cstr(path: &Path) -> ItbResult<CString> {
-    let text = path.to_str().ok_or(ItbError::Ffi("path is not valid UTF-8"))?;
+    let text = path
+        .to_str()
+        .ok_or(ItbError::Ffi("path is not valid UTF-8"))?;
     cstr(text, "path contains NUL")
 }
 

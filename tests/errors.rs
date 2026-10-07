@@ -49,7 +49,13 @@ fn register_mixed_then_duplicate() {
         mode: "singlemsg-nomac".into(),
         width: 256,
         mixed_hashes: [
-            "blake3", "blake2s", "areion256", "blake2b256", "chacha20", "blake3", "blake2s",
+            "blake3",
+            "blake2s",
+            "areion256",
+            "blake2b256",
+            "chacha20",
+            "blake3",
+            "blake2s",
             "areion256",
         ]
         .iter()
@@ -99,8 +105,14 @@ fn per_call_inner_hashes_override_round_trips() {
     // through the innerHashes= opts key). The blob carries the
     // resolved constellation, so the receiver needs no override.
     let mix = [
-        "areion512", "blake2b512", "areion512", "blake2b512",
-        "areion512", "blake2b512", "areion512", "blake2b512",
+        "areion512",
+        "blake2b512",
+        "areion512",
+        "blake2b512",
+        "areion512",
+        "blake2b512",
+        "areion512",
+        "blake2b512",
     ];
     let sender_opts = OptsBuilder::new().with_inner_hashes(&mix);
     let sender = Pipeline::init("singlemsg-triple-mac-v1", &sender_opts).unwrap();
@@ -110,4 +122,14 @@ fn per_call_inner_hashes_override_round_trips() {
     assert_eq!(receiver.decrypt_message(&wire).unwrap(), plain);
     let prof = itb3::inspect(&sender.save().unwrap()).unwrap();
     assert_eq!(prof.mixed_hashes, mix);
+}
+
+#[test]
+fn unknown_drbg_name_is_recipe_primitive_unknown() {
+    let opts = OptsBuilder::new().with_drbg("nope");
+    let err = Pipeline::init("singlemsg-triple-mac-v1", &opts).unwrap_err();
+    // Status only: ITB_LastError is process-global and cargo runs the
+    // tests of this binary on parallel threads, so the diagnostic text
+    // can belong to a neighbouring test's failing call.
+    assert_eq!(err.status(), Some(ItbStatus::RecipePrimitiveUnknown));
 }

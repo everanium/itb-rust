@@ -75,37 +75,11 @@ impl TryFrom<i32> for ItbStatus {
 }
 
 impl fmt::Display for ItbStatus {
+    /// Writes the variant's own name. The sentence describing a
+    /// failure arrives already assembled in the library's diagnostic
+    /// (`ItbError::Status::message`), so nothing here restates it.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let label = match self {
-            Self::Ok => "ok",
-            Self::BadHash => "unknown hash name",
-            Self::BadKeyBits => "invalid key bits",
-            Self::BadHandle => "invalid handle",
-            Self::BadInput => "invalid input",
-            Self::BufferTooSmall => "output buffer too small",
-            Self::EncryptFailed => "encrypt failed",
-            Self::DecryptFailed => "decrypt failed",
-            Self::SeedWidthMix => "seed width mismatch",
-            Self::BadMac => "unknown MAC name or invalid MAC handle",
-            Self::MacFailure => "MAC verification failed",
-            Self::BlobMalformedRecipe => "blob recipe malformed",
-            Self::RecipePrimitiveUnknown => "blob recipe names an unknown primitive",
-            Self::UnknownProfile => "unknown profile name",
-            Self::Reserved14
-            | Self::Reserved15
-            | Self::Reserved16
-            | Self::Reserved17 => "reserved status",
-            Self::BlobModeMismatch => "blob mode mismatch",
-            Self::BlobMalformed => "malformed state blob",
-            Self::BlobVersionTooNew => "blob version too new",
-            Self::BlobTooManyOpts => "too many blob export opts",
-            Self::StreamTruncated => "stream truncated before terminator",
-            Self::StreamAfterFinal => "stream chunk after terminator",
-            Self::TripleClosed => "Triple Pipeline is closed",
-            Self::ProfileExists => "profile name already registered",
-            Self::Internal => "internal error",
-        };
-        f.write_str(label)
+        write!(f, "{self:?}")
     }
 }
 

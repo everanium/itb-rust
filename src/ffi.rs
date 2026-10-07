@@ -32,6 +32,11 @@ use crate::error::{ItbError, ItbResult};
 pub(crate) type FnCStrOut = unsafe extern "C" fn(*mut c_char, usize, *mut usize) -> c_int;
 pub(crate) type FnSetMemoryLimit = unsafe extern "C" fn(i64) -> i64;
 pub(crate) type FnSetGCPercent = unsafe extern "C" fn(c_int) -> c_int;
+pub(crate) type FnSetGOMAXPROCS = unsafe extern "C" fn(c_int) -> c_int;
+pub(crate) type FnWriteHeapProfile = unsafe extern "C" fn(*const c_char) -> c_int;
+pub(crate) type FnPoolStatsLen = unsafe extern "C" fn() -> c_int;
+// (out, capElems, *outLen) — capacity and length counted in int64 slots
+pub(crate) type FnPoolStats = unsafe extern "C" fn(*mut i64, usize, *mut usize) -> c_int;
 // (profile, opts, blobOut, blobCap, *blobLen, *outHandle)
 pub(crate) type FnTripleInit = unsafe extern "C" fn(
     *const c_char,
@@ -104,9 +109,14 @@ pub(crate) type FnTripleStreamRead =
 /// Cached function pointers plus the Library that keeps them valid.
 pub(crate) struct Syms {
     pub(crate) ITB_Version: FnCStrOut,
+    pub(crate) ITB_DRBGAutoTier: FnCStrOut,
     pub(crate) ITB_LastError: FnCStrOut,
     pub(crate) ITB_SetMemoryLimit: FnSetMemoryLimit,
     pub(crate) ITB_SetGCPercent: FnSetGCPercent,
+    pub(crate) ITB_SetGOMAXPROCS: FnSetGOMAXPROCS,
+    pub(crate) ITB_WriteHeapProfile: FnWriteHeapProfile,
+    pub(crate) ITB_PoolStatsLen: FnPoolStatsLen,
+    pub(crate) ITB_PoolStats: FnPoolStats,
 
     pub(crate) ITB_Triple_Init: FnTripleInit,
     pub(crate) ITB_Triple_Load: FnTripleLoad,
@@ -125,6 +135,7 @@ pub(crate) struct Syms {
     pub(crate) ITB_Triple_Register: FnTripleRegister,
     pub(crate) ITB_Triple_Lookup: FnTripleLookup,
     pub(crate) ITB_Triple_Profiles: FnTripleProfiles,
+    pub(crate) ITB_Triple_HashNames: FnTripleProfiles,
     pub(crate) ITB_Triple_EncryptStreamBegin: FnTripleStreamBegin,
     pub(crate) ITB_Triple_DecryptStreamBegin: FnTripleStreamBegin,
     pub(crate) ITB_Triple_StreamWrite: FnTripleStreamWrite,
@@ -171,9 +182,14 @@ impl Syms {
         }
         Ok(Self {
             ITB_Version: sym!(b"ITB_Version"),
+            ITB_DRBGAutoTier: sym!(b"ITB_DRBGAutoTier"),
             ITB_LastError: sym!(b"ITB_LastError"),
             ITB_SetMemoryLimit: sym!(b"ITB_SetMemoryLimit"),
             ITB_SetGCPercent: sym!(b"ITB_SetGCPercent"),
+            ITB_SetGOMAXPROCS: sym!(b"ITB_SetGOMAXPROCS"),
+            ITB_WriteHeapProfile: sym!(b"ITB_WriteHeapProfile"),
+            ITB_PoolStatsLen: sym!(b"ITB_PoolStatsLen"),
+            ITB_PoolStats: sym!(b"ITB_PoolStats"),
             ITB_Triple_Init: sym!(b"ITB_Triple_Init"),
             ITB_Triple_Load: sym!(b"ITB_Triple_Load"),
             ITB_Triple_LoadF: sym!(b"ITB_Triple_LoadF"),
@@ -191,6 +207,7 @@ impl Syms {
             ITB_Triple_Register: sym!(b"ITB_Triple_Register"),
             ITB_Triple_Lookup: sym!(b"ITB_Triple_Lookup"),
             ITB_Triple_Profiles: sym!(b"ITB_Triple_Profiles"),
+            ITB_Triple_HashNames: sym!(b"ITB_Triple_HashNames"),
             ITB_Triple_EncryptStreamBegin: sym!(b"ITB_Triple_EncryptStreamBegin"),
             ITB_Triple_DecryptStreamBegin: sym!(b"ITB_Triple_DecryptStreamBegin"),
             ITB_Triple_StreamWrite: sym!(b"ITB_Triple_StreamWrite"),

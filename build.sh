@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# build.sh -- one-step build for the Rust binding: libitb3.so + cargo
-# build. Prerequisites (Go, rustup / cargo) must be installed
-# separately; see README.md "Prerequisites" section.
+# One-step build for the Rust binding: libitb3.so + cargo build.
+# Prerequisites (Go, rustup / cargo) must be installed separately; see
+# README.md "Prerequisites" section.
 #
 # Every artefact this binding owns is removed before the build, so
-# nothing in the tree predates the invocation. eitb is a separate crate
-# under eitb/ with its own target directory, and it is built here on
-# every invocation rather than only when its binary happens to be
-# missing.
+# nothing in the tree predates the invocation. eitb and loop are
+# separate crates under eitb/ and loop/ with their own target
+# directories, and both are built here on every invocation rather than
+# only when their binaries happen to be missing.
 #
 # Usage:
 #   ./build.sh             # default build (full asm stack)
@@ -102,18 +102,21 @@ if [[ "${ITB_SKIP_CLEAN:-0}" == "1" ]]; then
     echo "==> ITB_SKIP_CLEAN=1: keeping the existing artefacts"
 else
     echo "==> removing the artefacts owned by this binding"
-    # eitb/ is a standalone crate: its target directory is separate from
-    # the root crate's and would otherwise keep an older eitb binary.
+    # eitb/ and loop/ are standalone crates: their target directories
+    # are separate from the root crate's and would otherwise keep an
+    # older eitb or loop binary.
     clean_target 'target'
     clean_target 'eitb/target'
+    clean_target 'loop/target'
     if [[ "${ITB_KEEP_DOWNLOADS:-0}" == "1" ]]; then
-        echo "[clean] ITB_KEEP_DOWNLOADS=1: keeping Cargo.lock and eitb/Cargo.lock (weaker guarantee)"
+        echo "[clean] ITB_KEEP_DOWNLOADS=1: keeping Cargo.lock, eitb/Cargo.lock and loop/Cargo.lock (weaker guarantee)"
     else
         # Re-resolving these reads the crates.io index, so the wipe of
         # the lock files is the part of the guarantee that needs
         # network on a cold cargo registry cache.
         clean_target 'Cargo.lock'
         clean_target 'eitb/Cargo.lock'
+        clean_target 'loop/Cargo.lock'
     fi
 fi
 
@@ -131,6 +134,14 @@ echo "==> building the eitb demonstrator"
 
 if [[ ! -x eitb/target/release/eitb ]]; then
     echo "build.sh: eitb/target/release/eitb was not produced" >&2
+    exit 1
+fi
+
+echo "==> building the loop stress harness"
+( cd loop && cargo build --release )
+
+if [[ ! -x loop/target/release/loop ]]; then
+    echo "build.sh: loop/target/release/loop was not produced" >&2
     exit 1
 fi
 

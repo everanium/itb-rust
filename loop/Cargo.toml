@@ -1,0 +1,19 @@
+[package]
+name = "itb-loop"
+version = "0.5.1"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0"
+description = "Long-run stress harness for the ITB Rust binding"
+publish = false
+
+[dependencies]
+libitb3 = { path = ".." }
+libc = "0.2"
+
+[[bin]]
+name = "loop"
+path = "src/main.rs"
+
+# Standalone package — stop cargo's workspace inference at this dir.
+[workspace]

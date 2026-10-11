@@ -21,6 +21,12 @@ impl OptsBuilder {
         Self::default()
     }
 
+    /// Container floor sizing mode override (`mode`): 0 defers to default,
+    /// 1 pins per-region, 2 selects per-container compact VPN sizing.
+    pub fn with_mode(self, n: i64) -> Self {
+        self.with_raw("mode", &n.to_string())
+    }
+
     /// Hex-encodes the parallax master override (`pm`).
     pub fn with_perm_master(self, master: &[u8]) -> Self {
         self.with_raw("pm", &hex(master))
@@ -153,6 +159,7 @@ mod tests {
     #[test]
     fn typed_setters_render_expected_keys() {
         let q = OptsBuilder::new()
+            .with_mode(2)
             .with_perm_master(&[0xab, 0x01])
             .with_wrap_master(&[0xcd, 0xef])
             .with_parallax(true)
@@ -171,7 +178,7 @@ mod tests {
             .build();
         assert_eq!(
             q.to_str().unwrap(),
-            "pm=ab01&wm=cdef&withParallax=true&withWrapper=false&\
+            "mode=2&pm=ab01&wm=cdef&withParallax=true&withWrapper=false&\
              maxWorkers=4&nonceBits=512&barrierFill=4&chunkSize=4096&\
              keyBits=1024&parallaxSegmentSize=65536&macName=hmac-blake3&\
              innerHash=areion512&outerCipher=chacha20&drbg=csprng&\

@@ -866,6 +866,7 @@ fn fill_keystream_layers(
 /// reopens use the retained blob; save is never called again.
 fn build_pipeline(cfg: &Config, profile: &str) -> Result<(Pipeline, Vec<u8>), ()> {
     let mut opts = OptsBuilder::new()
+        .with_mode(cfg.blob_mode as i64)
         .with_inner_hash(&cfg.hash)
         .with_mac_name(&cfg.mac)
         .with_parallax(cfg.parallax)
@@ -885,58 +886,22 @@ fn build_pipeline(cfg: &Config, profile: &str) -> Result<(Pipeline, Vec<u8>), ()
             );
         }
     }
-    let mut pipe = match Pipeline::init(profile, &opts) {
+    let pipe = match Pipeline::init(profile, &opts) {
         Ok(p) => p,
         Err(e) => {
             eprintln!("loop: Init({profile}): {}", worker::detail(&e));
             return Err(());
         }
     };
-    let mut blob = match pipe.save() {
+    let blob = match pipe.save() {
         Ok(b) => b,
         Err(e) => {
             eprintln!("loop: Save({profile}): {}", worker::detail(&e));
             return Err(());
         }
     };
-    if cfg.blob_mode == 2 {
-        // The sizing mode is not an Opts knob: the Init blob is edited
-        // and the pipeline reopened from it, so the retained blob (the
-        // one blob-cycle reopens from) carries the edited mode.
-        if edit_inner_blob_mode(&mut blob, 2).is_none() {
-            eprintln!("loop: rewrite blob mode: inner blob mode field not found");
-            return Err(());
-        }
-        drop(pipe);
-        pipe = match Pipeline::load(&blob, None) {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("loop: reload Mode 2 blob: {}", worker::detail(&e));
-                return Err(());
-            }
-        };
-    }
     log_pipeline_initialised(profile, &blob);
     Ok((pipe, blob))
-}
-
-/// Sets the inner blob's "mode" field of a wrap-layer session blob to
-/// target_mode (1 = per-region, 2 = per-container) in place. The wrap
-/// layer's profile record carries its own "mode" (a string), so the
-/// search starts at the inner blob ("ib"); both shipped modes are one
-/// digit wide, so the blob length does not change. `None` when the
-/// inner blob or its mode field is not found.
-fn edit_inner_blob_mode(blob: &mut [u8], target_mode: u8) -> Option<()> {
-    let find = |hay: &[u8], needle: &[u8]| hay.windows(needle.len()).position(|w| w == needle);
-    let ib_key = b"\"ib\":{";
-    let mode_key = b"\"mode\":";
-    let off = find(blob, ib_key)? + ib_key.len();
-    let at = off + find(&blob[off..], mode_key)? + mode_key.len();
-    if at + 1 >= blob.len() || !(b'1'..=b'2').contains(&blob[at]) || blob[at + 1].is_ascii_digit() {
-        return None;
-    }
-    blob[at] = b'0' + target_mode;
-    Some(())
 }
 
 /// Prints the construction line with the recipe read back from the

@@ -76,8 +76,9 @@ worker cap). The resolved shape travels inside the blob, so the
 receiver needs no options of its own:
 
 ```rust,no_run
-# use itb3::{OptsBuilder, Pipeline};
+// Mode 1 per-region (default), Mode 2 per-container (compact VPN tunnel mode)
 let opts = OptsBuilder::new()
+    .with_mode(2)
     .with_chunk_size(65536)
     .with_wrapper(false)
     .with_max_workers(4);

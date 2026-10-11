@@ -99,27 +99,32 @@ fn inspect_carries_the_runtime_globals_lookup_does_not() {
     let prof = inspect(&sender.save().unwrap()).unwrap();
     assert_eq!(prof.nonce_bits, Some(512));
     assert_eq!(prof.barrier_fill, Some(1));
+    assert_eq!(prof.container_mode, Some(1));
 
     // Per-Pipeline overrides travel through the blob into inspect.
     let tuned = Pipeline::init(
         "singlemsg-triple-mac-v1",
-        &OptsBuilder::new().with_nonce_bits(256).with_barrier_fill(4),
+        &OptsBuilder::new().with_mode(2).with_nonce_bits(256).with_barrier_fill(4),
     )
     .unwrap();
     let tuned_prof = inspect(&tuned.save().unwrap()).unwrap();
+    assert_eq!(tuned_prof.container_mode, Some(2));
     assert_eq!(tuned_prof.nonce_bits, Some(256));
     assert_eq!(tuned_prof.barrier_fill, Some(4));
 
     // The registry entry is the recipe alone — neither field is part
     // of it, so both read as absent rather than as zero.
     let registry = lookup("singlemsg-triple-mac-v1").unwrap();
+    assert_eq!(registry.container_mode, None);
     assert_eq!(registry.nonce_bits, None);
     assert_eq!(registry.barrier_fill, None);
 
     // A lookup record still serialises without the two keys, so it
     // remains a valid register payload; an inspected one carries them.
+    assert!(!registry.to_json().contains("container_mode"));
     assert!(!registry.to_json().contains("nonce_bits"));
     assert!(!registry.to_json().contains("barrier_fill"));
+    assert!(tuned_prof.to_json().contains("\"container_mode\":2"));
     assert!(tuned_prof.to_json().contains("\"nonce_bits\":256"));
     assert!(tuned_prof.to_json().contains("\"barrier_fill\":4"));
 }

@@ -12,7 +12,7 @@ compiler at install time, no compile-time link; the `.so` / `.dylib`
 / `.dll` is resolved and dispatched at first use. Every hash-name /
 MAC-name / cipher-name / profile-name is an opaque string passed
 through to Go for validation; the binding carries no ITB construction
-logic. The public surface is one `Pipeline` type (Init / Load / Save
+logic. The public surface is one `Pipeline` type (Init / InitKeys / Load / Save
 / Rekey / Close, Single Message encrypt / decrypt, one-shot stream calls,
 buffered and incremental stream sessions with `io::Read` / `io::Write` pumps), an
 `OptsBuilder` query-string builder for Init overrides, the `Profile`
@@ -86,6 +86,8 @@ let sender = Pipeline::init("singlemsg-triple-mac-v1", &opts)?;
 let _receiver = Pipeline::load(&sender.save()?, None)?;
 # Ok::<(), itb3::ItbError>(())
 ```
+
+`Pipeline::init_keys` constructs a `Pipeline` deterministically from eight caller-supplied master keys (one per seed slot `0..7`) via per-slot KDF, so two peers holding the same eight master keys derive identical `Pipeline` instances without exchanging a session blob. The eight master keys must come from independent entropy or key-agreement sources — never derive all eight keys from a single secret or a single KDF parent key.
 
 `Pipeline::rekey` rotates the parallax + wrapper masters mid-session
 (the eight ITB seeds and MAC key are fixed for the session lifetime

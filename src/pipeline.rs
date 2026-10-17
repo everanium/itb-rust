@@ -85,6 +85,51 @@ impl Pipeline {
         Ok(Self { handle })
     }
 
+    /// Deterministically constructs a Pipeline from eight caller-supplied
+    /// master keys (one per canonical seed slot 0..7) against the named
+    /// profile and options. The eight master keys must come from
+    /// independent entropy or key-agreement sources; never derive all
+    /// eight keys from a single secret or a single KDF parent key.
+    pub fn init_keys<K: AsRef<[u8]>>(
+        profile: &str,
+        opts: &OptsBuilder,
+        masters: &[K],
+    ) -> ItbResult<Self> {
+        let s = ffi::syms()?;
+        let profile_c = cstr(profile, "profile name contains NUL")?;
+        let opts_c = opts.build();
+        let master_lens: Vec<usize> = masters.iter().map(|m| m.as_ref().len()).collect();
+        let masters_flat_len: usize = master_lens.iter().sum();
+        let mut masters_flat = Vec::with_capacity(masters_flat_len);
+        for m in masters {
+            masters_flat.extend_from_slice(m.as_ref());
+        }
+        let mut handle = 0usize;
+        let res = retry_once(BLOB_CAP, |buf, len| {
+            // SAFETY: all pointers reference live buffers for the
+            // duration of the call; len / handle are valid out-params.
+            unsafe {
+                (s.ITB_Triple_InitKeys)(
+                    profile_c.as_ptr(),
+                    opts_c.as_ptr(),
+                    masters_flat.as_ptr().cast(),
+                    masters_flat.len(),
+                    master_lens.as_ptr(),
+                    masters.len(),
+                    buf.as_mut_ptr().cast(),
+                    buf.len(),
+                    len,
+                    &mut handle,
+                )
+            }
+        });
+        for b in &mut masters_flat {
+            unsafe { std::ptr::write_volatile(b, 0) };
+        }
+        res?;
+        Ok(Self { handle })
+    }
+
     /// Reconstructs a Pipeline from a blob produced by
     /// [`Pipeline::save`] or [`Pipeline::rekey`]. `masters` is `None`
     /// to use the blob-embedded masters, or `Some((perm, wrap))` to

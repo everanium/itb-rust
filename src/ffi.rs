@@ -46,6 +46,20 @@ pub(crate) type FnTripleInit = unsafe extern "C" fn(
     *mut usize,
     *mut usize,
 ) -> c_int;
+// (profile, opts, mastersFlat, mastersFlatLen, masterLens, mastersCount,
+//  blobOut, blobCap, *blobLen, *outHandle)
+pub(crate) type FnTripleInitKeys = unsafe extern "C" fn(
+    *const c_char,
+    *const c_char,
+    *const c_void,
+    usize,
+    *const usize,
+    usize,
+    *mut c_void,
+    usize,
+    *mut usize,
+    *mut usize,
+) -> c_int;
 // (blob, blobLen, permMaster, permMasterLen, wrapMaster, wrapMasterLen,
 //  mastersCount, *outHandle)
 pub(crate) type FnTripleLoad = unsafe extern "C" fn(
@@ -119,6 +133,7 @@ pub(crate) struct Syms {
     pub(crate) ITB_PoolStats: FnPoolStats,
 
     pub(crate) ITB_Triple_Init: FnTripleInit,
+    pub(crate) ITB_Triple_InitKeys: FnTripleInitKeys,
     pub(crate) ITB_Triple_Load: FnTripleLoad,
     pub(crate) ITB_Triple_LoadF: FnTripleLoadF,
     pub(crate) ITB_Triple_Save: FnTripleSave,
@@ -191,6 +206,7 @@ impl Syms {
             ITB_PoolStatsLen: sym!(b"ITB_PoolStatsLen"),
             ITB_PoolStats: sym!(b"ITB_PoolStats"),
             ITB_Triple_Init: sym!(b"ITB_Triple_Init"),
+            ITB_Triple_InitKeys: sym!(b"ITB_Triple_InitKeys"),
             ITB_Triple_Load: sym!(b"ITB_Triple_Load"),
             ITB_Triple_LoadF: sym!(b"ITB_Triple_LoadF"),
             ITB_Triple_Save: sym!(b"ITB_Triple_Save"),

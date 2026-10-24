@@ -68,7 +68,7 @@ impl Pipeline {
         let profile_c = cstr(profile, "profile name contains NUL")?;
         let opts_c = opts.build();
         let mut handle = 0usize;
-        retry_once(BLOB_CAP, |buf, len| {
+        let res = retry_once(BLOB_CAP, |buf, len| {
             // SAFETY: all pointers reference live buffers for the
             // duration of the call; len / handle are valid out-params.
             unsafe {
@@ -81,7 +81,15 @@ impl Pipeline {
                     &mut handle,
                 )
             }
-        })?;
+        });
+        let mut opts_bytes = opts_c.into_bytes_with_nul();
+        for b in &mut opts_bytes {
+            unsafe { std::ptr::write_volatile(b, 0) };
+        }
+        let mut blob = res?;
+        for b in &mut blob {
+            unsafe { std::ptr::write_volatile(b, 0) };
+        }
         Ok(Self { handle })
     }
 
@@ -126,7 +134,14 @@ impl Pipeline {
         for b in &mut masters_flat {
             unsafe { std::ptr::write_volatile(b, 0) };
         }
-        res?;
+        let mut opts_bytes = opts_c.into_bytes_with_nul();
+        for b in &mut opts_bytes {
+            unsafe { std::ptr::write_volatile(b, 0) };
+        }
+        let mut blob = res?;
+        for b in &mut blob {
+            unsafe { std::ptr::write_volatile(b, 0) };
+        }
         Ok(Self { handle })
     }
 

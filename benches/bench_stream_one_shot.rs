@@ -59,6 +59,15 @@ fn profile_name() -> String {
     env::var("ITB_PROFILE").unwrap_or_else(|_| "streaming-noaead-triple-v1".to_string())
 }
 
+fn bench_min_sec() -> Duration {
+    env::var("ITB_BENCH_MIN_SEC")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .filter(|&v| v > 0.0)
+        .map(Duration::from_secs_f64)
+        .unwrap_or_else(|| Duration::from_secs(5))
+}
+
 fn bench_stream_one_shot(c: &mut Criterion) {
     // Bench-scale allocation churn grows the Go scratch heap
     // unboundedly without a soft memory cap + aggressive GC; the
@@ -67,10 +76,12 @@ fn bench_stream_one_shot(c: &mut Criterion) {
     let _ = set_gc_percent(100);
     let opts = build_opts();
     let pipe = Pipeline::init(&profile_name(), &opts).unwrap();
+    let min_dur = bench_min_sec();
     let mut group = c.benchmark_group("encrypt_stream_one_shot");
     group
         .sample_size(10)
-        .measurement_time(Duration::from_secs(5));
+        .warm_up_time(min_dur.min(Duration::from_secs(3)))
+        .measurement_time(min_dur);
     for size in [1usize << 20, 16 << 20, 64 << 20] {
         let mut plain = vec![0u8; size];
         // CSPRNG-fill so plaintext content matches the root Go bench
@@ -88,7 +99,8 @@ fn bench_stream_one_shot(c: &mut Criterion) {
     let mut dec_group = c.benchmark_group("decrypt_stream_one_shot");
     dec_group
         .sample_size(10)
-        .measurement_time(Duration::from_secs(5));
+        .warm_up_time(min_dur.min(Duration::from_secs(3)))
+        .measurement_time(min_dur);
     for size in [1usize << 20, 16 << 20, 64 << 20] {
         let mut plain = vec![0u8; size];
         rand::rng().fill_bytes(&mut plain);

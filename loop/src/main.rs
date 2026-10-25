@@ -102,6 +102,7 @@ pub struct Config {
     pub chunk_size: i64,
     pub barrier_fill: i64,
     pub drbg: String,
+    pub interlock: String,
     pub gomaxprocs: i32,
     pub rekey_every: i64,
     pub blob_cycle_every: i64,
@@ -218,6 +219,7 @@ struct RawFlags {
     gomaxprocs: i64,
     goroutines: i64,
     hash: String,
+    interlock: String,
     iterations: i64,
     json_output: bool,
     key_bits: i64,
@@ -248,6 +250,7 @@ impl Default for RawFlags {
             gomaxprocs: 0,
             goroutines: 3,
             hash: "areion512".into(),
+            interlock: String::new(),
             iterations: 0,
             json_output: false,
             key_bits: 0,
@@ -288,7 +291,7 @@ struct Flag {
     show_default: bool,
 }
 
-const FLAGS: [Flag; 25] = [
+const FLAGS: [Flag; 26] = [
     Flag {
         name: "barrier-fill",
         type_label: "int",
@@ -357,6 +360,13 @@ const FLAGS: [Flag; 25] = [
         type_label: "string",
         help: "inner ITB hash primitive name",
         slot: Slot::Str(|f| &mut f.hash),
+        show_default: true,
+    },
+    Flag {
+        name: "interlock",
+        type_label: "string",
+        help: "Interlocked Barrier chunk width: 48 | 168; empty = profile default (48; 168 requires 512-bit hash)",
+        slot: Slot::Str(|f| &mut f.interlock),
         show_default: true,
     },
     Flag {
@@ -731,6 +741,13 @@ fn parse_flags(args: &[String]) -> Result<Option<Config>, ()> {
         return Err(());
     }
     // --drbg is validated by Init: the C ABI enumerates no DRBG names.
+    if !matches!(f.interlock.as_str(), "" | "48" | "168") {
+        eprintln!(
+            "loop: --interlock must be 48 | 168 (or empty = profile default), got \"{}\"",
+            f.interlock
+        );
+        return Err(());
+    }
     let Some(chunk_size) = parse_size(&f.chunk_size) else {
         eprintln!("loop: --chunk-size: invalid size \"{}\"", f.chunk_size);
         return Err(());
@@ -781,6 +798,7 @@ fn parse_flags(args: &[String]) -> Result<Option<Config>, ()> {
         chunk_size,
         barrier_fill: f.barrier_fill,
         drbg: f.drbg,
+        interlock: f.interlock,
         gomaxprocs: f.gomaxprocs as i32,
         rekey_every: f.rekey_every,
         blob_cycle_every: f.blob_cycle_every,
@@ -875,6 +893,7 @@ fn build_pipeline(cfg: &Config, profile: &str) -> Result<(Pipeline, Vec<u8>), ()
         .with_nonce_bits(cfg.nonce_bits)
         .with_barrier_fill(cfg.barrier_fill)
         .with_drbg(&cfg.drbg)
+        .with_interlock(&cfg.interlock)
         .with_chunk_size(cfg.chunk_size);
     if !cfg.profile.is_empty() {
         let (o, filled) = fill_keystream_layers(&cfg.profile, opts, cfg.parallax, cfg.wrapper)?;
@@ -945,6 +964,9 @@ fn log_pipeline_initialised(profile: &str, blob: &[u8]) {
     }
     if !rec.drbg.is_empty() {
         line.push_str(&format!(" drbg={}", rec.drbg));
+    }
+    if !rec.interlock.is_empty() {
+        line.push_str(&format!(" interlock={}", rec.interlock));
     }
     log_line(&line);
 }
@@ -1020,6 +1042,9 @@ fn run(args: &[String]) -> i32 {
     }
     if !cfg.drbg.is_empty() {
         overrides.push_str(&format!(" drbg={}", cfg.drbg));
+    }
+    if !cfg.interlock.is_empty() {
+        overrides.push_str(&format!(" interlock={}", cfg.interlock));
     }
     log_line(&overrides);
     log_line(&format!(

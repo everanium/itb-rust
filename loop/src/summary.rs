@@ -306,6 +306,7 @@ pub fn final_summary(r: &RunState, elapsed_ns: i64) -> i32 {
             ",\"drbg_auto_tier\":{}",
             json_string(&itb3::drbg_auto_tier().unwrap_or_default())
         ));
+        j.push_str(&format!(",\"interlock\":{}", json_string(&cfg.interlock)));
         j.push_str(&format!(",\"chunk_size_bytes\":{}", cfg.chunk_size));
         j.push_str(&format!(",\"barrier_fill\":{}", cfg.barrier_fill));
         j.push_str(&format!(",\"parallax\":\"{}\"", on_off(cfg.parallax)));

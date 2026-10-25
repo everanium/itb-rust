@@ -77,8 +77,10 @@ receiver needs no options of its own:
 
 ```rust,no_run
 // Mode 1 per-region (default), Mode 2 per-container (compact VPN tunnel mode)
+// Interlocked Barrier chunk width: "48" (default) or "168" (requires 512-bit hash)
 let opts = OptsBuilder::new()
     .with_mode(2)
+    .with_interlock("168")
     .with_chunk_size(65536)
     .with_wrapper(false)
     .with_max_workers(4);

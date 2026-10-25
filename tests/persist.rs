@@ -212,3 +212,47 @@ fn register_copy_of_an_inspected_record_keeps_drbg() {
     let wire = p.encrypt_message(b"registered drbg").unwrap();
     assert_eq!(receiver.decrypt_message(&wire).unwrap(), b"registered drbg");
 }
+
+#[test]
+fn interlock_168_round_trips_and_travels_in_the_blob() {
+    let sender = Pipeline::init(
+        "singlemsg-triple-mac-v1",
+        &OptsBuilder::new().with_interlock("168"),
+    )
+    .unwrap();
+    let blob = sender.save().unwrap();
+    let receiver = Pipeline::load(&blob, None).unwrap();
+    let wire = sender.encrypt_message(b"interlock payload").unwrap();
+    assert_eq!(receiver.decrypt_message(&wire).unwrap(), b"interlock payload");
+    let back = receiver.encrypt_message(b"interlock reply").unwrap();
+    assert_eq!(sender.decrypt_message(&back).unwrap(), b"interlock reply");
+
+    let prof = inspect(&blob).unwrap();
+    assert_eq!(prof.interlock, "168");
+    assert!(prof.to_json().contains("\"interlock\":\"168\""));
+
+    let def = Pipeline::init("singlemsg-triple-mac-v1", &OptsBuilder::new()).unwrap();
+    let def_prof = inspect(&def.save().unwrap()).unwrap();
+    assert!(def_prof.interlock.is_empty());
+    assert!(!def_prof.to_json().contains("interlock"));
+
+    // 256-bit hash with interlock=168 must fail with BadInput.
+    let err_width = Pipeline::init(
+        "singlemsg-triple-mac-v1",
+        &OptsBuilder::new()
+            .with_inner_hash("blake3")
+            .with_interlock("168"),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(err_width.status(), Some(ItbStatus::BadInput));
+
+    // Invalid interlock=96 must fail with BadInput.
+    let err_val = Pipeline::init(
+        "singlemsg-triple-mac-v1",
+        &OptsBuilder::new().with_interlock("96"),
+    )
+    .err()
+    .unwrap();
+    assert_eq!(err_val.status(), Some(ItbStatus::BadInput));
+}

@@ -62,6 +62,9 @@ pub struct Profile {
     /// DRBG fill primitive name; empty for the auto tier.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub drbg: String,
+    /// Interlocked Barrier chunk width (`"48"` or `"168"`); empty for the 48-bit default.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub interlock: String,
     /// MAC name; empty for No MAC modes.
     #[serde(default, rename = "mac", skip_serializing_if = "String::is_empty")]
     pub mac_name: String,

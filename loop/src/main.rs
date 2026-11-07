@@ -309,7 +309,7 @@ const FLAGS: [Flag; 26] = [
     Flag {
         name: "blob-mode",
         type_label: "int",
-        help: "container floor sizing mode: 1 (per-region, default) | 2 (per-container)",
+        help: "container floor sizing mode: 1 (per-region, default) | 2 (per-container) | 3 (gauss-posit)",
         slot: Slot::Int(|f| &mut f.blob_mode),
         show_default: true,
     },
@@ -726,9 +726,9 @@ fn parse_flags(args: &[String]) -> Result<Option<Config>, ()> {
         );
         return Err(());
     }
-    if !matches!(f.blob_mode, 1 | 2) {
+    if !matches!(f.blob_mode, 1 | 2 | 3) {
         eprintln!(
-            "loop: --blob-mode must be 1 (per-region) | 2 (per-container), got {}",
+            "loop: --blob-mode must be 1 (per-region) | 2 (per-container) | 3 (gauss-posit), got {}",
             f.blob_mode
         );
         return Err(());
@@ -959,8 +959,8 @@ fn log_pipeline_initialised(profile: &str, blob: &[u8]) {
         on_off(rec.parallax),
         on_off(rec.wrapper)
     );
-    if rec.container_mode == Some(2) {
-        line.push_str(" container-mode=2");
+    if let Some(container_mode @ (2 | 3)) = rec.container_mode {
+        line.push_str(&format!(" container-mode={container_mode}"));
     }
     if !rec.drbg.is_empty() {
         line.push_str(&format!(" drbg={}", rec.drbg));

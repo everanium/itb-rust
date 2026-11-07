@@ -112,6 +112,14 @@ fn inspect_carries_the_runtime_globals_lookup_does_not() {
     assert_eq!(tuned_prof.nonce_bits, Some(256));
     assert_eq!(tuned_prof.barrier_fill, Some(4));
 
+    let tuned3 = Pipeline::init(
+        "singlemsg-triple-mac-v1",
+        &OptsBuilder::new().with_mode(3),
+    )
+    .unwrap();
+    let tuned3_prof = inspect(&tuned3.save().unwrap()).unwrap();
+    assert_eq!(tuned3_prof.container_mode, Some(3));
+
     // The registry entry is the recipe alone — neither field is part
     // of it, so both read as absent rather than as zero.
     let registry = lookup("singlemsg-triple-mac-v1").unwrap();
@@ -125,6 +133,7 @@ fn inspect_carries_the_runtime_globals_lookup_does_not() {
     assert!(!registry.to_json().contains("nonce_bits"));
     assert!(!registry.to_json().contains("barrier_fill"));
     assert!(tuned_prof.to_json().contains("\"container_mode\":2"));
+    assert!(tuned3_prof.to_json().contains("\"container_mode\":3"));
     assert!(tuned_prof.to_json().contains("\"nonce_bits\":256"));
     assert!(tuned_prof.to_json().contains("\"barrier_fill\":4"));
 }
